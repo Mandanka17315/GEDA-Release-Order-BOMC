@@ -17,7 +17,16 @@ function isAdmin() { return S.mode === 'admin'; }
 
 /* ---------- start-up / login ---------- */
 async function boot() {
-  if (!DB.init()) { $('#setupCard').style.display = ''; setStatus('Not connected', 'bad'); $('#tabs').style.display = 'none'; return; }
+  let ok = false;
+  try {
+    if (typeof supabase === 'undefined') throw new Error('lib/supabase.js did not load. Check that the lib folder (with supabase.js) is uploaded next to index.html.');
+    if (!window.GEDA_CONFIG) throw new Error('config.js did not load or has a typing mistake. Check that config.js is next to index.html.');
+    ok = DB.init();
+  } catch (e) {
+    console.error(e); setStatus('Not connected', 'bad'); $('#tabs').style.display = 'none'; $('#btnLogin').style.display = 'none'; $('#btnRefresh').style.display = 'none';
+    $('#setupCard').style.display = ''; $('#setupCard').insertAdjacentHTML('afterbegin', `<div class="note bad"><b>Problem:</b> ${esc(e.message)}</div>`); return;
+  }
+  if (!ok) { $('#setupCard').style.display = ''; setStatus('Not connected – check config.js', 'bad'); $('#tabs').style.display = 'none'; $('#btnLogin').style.display = 'none'; $('#btnRefresh').style.display = 'none'; return; }
   busy(true, 'Loading…');
   try {
     const s = await DB.session();
@@ -44,7 +53,8 @@ function applyMode() {
   renderSettings(); refreshAll();
   showPage(isAdmin() ? 'dash' : 'pend');
 }
-function openLogin() { $('#loginBox').style.display = ''; $('#lgMsg').innerHTML = ''; setTimeout(() => $('#lgEmail').focus(), 50); }
+function openLogin() {
+  if (!S.sb) { toast('Not connected to Supabase: <b>config.js</b> still has the placeholder URL/key. Put your Project URL and anon key in config.js.', 'bad', 10000); return; } $('#loginBox').style.display = ''; $('#lgMsg').innerHTML = ''; setTimeout(() => $('#lgEmail').focus(), 50); }
 async function doLogin() {
   const email = $('#lgEmail').value.trim(), pass = $('#lgPass').value;
   if (!email || !pass) return;
