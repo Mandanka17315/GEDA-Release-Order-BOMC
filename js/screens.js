@@ -17,7 +17,16 @@ function isAdmin() { return S.mode === 'admin'; }
 
 /* ---------- start-up / login ---------- */
 async function boot() {
-  if (!DB.init()) { $('#setupCard').style.display = ''; setStatus('Not connected', 'bad'); $('#tabs').style.display = 'none'; return; }
+  let ok = false;
+  try {
+    if (typeof supabase === 'undefined') throw new Error('lib/supabase.js did not load. Check that the lib folder (with supabase.js) is uploaded next to index.html.');
+    if (!window.GEDA_CONFIG) throw new Error('config.js did not load or has a typing mistake. Check that config.js is next to index.html.');
+    ok = DB.init();
+  } catch (e) {
+    console.error(e); setStatus('Not connected', 'bad'); $('#tabs').style.display = 'none'; $('#btnLogin').style.display = 'none'; $('#btnRefresh').style.display = 'none';
+    $('#setupCard').style.display = ''; $('#setupCard').insertAdjacentHTML('afterbegin', `<div class="note bad"><b>Problem:</b> ${esc(e.message)}</div>`); return;
+  }
+  if (!ok) { $('#setupCard').style.display = ''; setStatus('Not connected – check config.js', 'bad'); $('#tabs').style.display = 'none'; $('#btnLogin').style.display = 'none'; $('#btnRefresh').style.display = 'none'; return; }
   busy(true, 'Loading…');
   try {
     const s = await DB.session();
@@ -44,7 +53,8 @@ function applyMode() {
   renderSettings(); refreshAll();
   showPage(isAdmin() ? 'dash' : 'pend');
 }
-function openLogin() { $('#loginBox').style.display = ''; $('#lgMsg').innerHTML = ''; setTimeout(() => $('#lgEmail').focus(), 50); }
+function openLogin() {
+  if (!S.sb) { toast('Not connected to Supabase: <b>config.js</b> still has the placeholder URL/key. Put your Project URL and anon key in config.js.', 'bad', 10000); return; } $('#loginBox').style.display = ''; $('#lgMsg').innerHTML = ''; setTimeout(() => $('#lgEmail').focus(), 50); }
 async function doLogin() {
   const email = $('#lgEmail').value.trim(), pass = $('#lgPass').value;
   if (!email || !pass) return;
@@ -378,7 +388,6 @@ function pendRows() {
     if (dv && clean(r.v.div) !== dv) return false;
     if (sd && sdnName(r.v) !== sd) return false;
     if (age === '30') { const rs = roSerial(r.v); if (!rs || today - rs <= 30) return false; }
-    if (age === 'portal') { const pm = portalMeter(r); if (!pm || !pm.d) return false; }
     if (q && !(r.key + ' ' + r.v.cons + ' ' + r.v.name + ' ' + r.v.village).toUpperCase().includes(q)) return false;
     return true;
   }).sort((a, b) => (roSerial(a.v) || 0) - (roSerial(b.v) || 0));
@@ -386,18 +395,17 @@ function pendRows() {
 function renderPend() {
   const rows = pendRows(), today = todaySerial();
   $('#pCount').textContent = `${rows.length} pending connection${rows.length === 1 ? '' : 's'}`;
-  $('#pendTable').innerHTML = `<thead><tr><th>Application / Consumer</th><th>Sub-division</th><th class="num">PV kW</th><th>RO date</th><th class="num">Days</th><th>Portal</th><th style="width:150px">Meter installed on</th><th style="min-width:240px">Reason for pending</th></tr></thead><tbody>` +
-    (rows.length ? rows.map(r => {
-      const v = r.v, rs = roSerial(v), days = rs ? today - rs : '', e = PEND.edits.get(r.key) || {}, pm = portalMeter(r);
-      const pmTxt = pm && pm.d ? `<span class="pill ok" title="${esc(pm.status)}">Meter ${fmtD(pm.d)}</span> <button class="link" data-pm="${esc(r.key)}" data-d="${isoD(pm.d)}">use</button>` : (pm && pm.status ? `<span class="pill">${esc(pm.status)}</span>` : '');
+  $('#pendTable').innerHTML = `<thead><tr><th style="width:44px" class="num">#</th><th>Application No.</th><th>Consumer</th><th>Sub-division</th><th class="num">PV kW</th><th>RO date</th><th class="num">Days</th><th style="width:150px">Meter installed on</th><th style="min-width:240px">Reason for pending</th></tr></thead><tbody>` +
+    (rows.length ? rows.map((r, i) => {
+      const v = r.v, rs = roSerial(v), days = rs ? today - rs : '', e = PEND.edits.get(r.key) || {};
       const appCell = isAdmin() ? `<a href="#" data-open="${esc(r.key)}">${esc(v.app)}</a>` : `<b>${esc(v.app)}</b>`;
-      return `<tr data-k="${esc(r.key)}" class="${PEND.edits.has(r.key) ? 'dirty' : ''}"><td>${appCell}<div>${esc(clean(v.name))}</div><div class="small muted">${esc(v.cons)} · ${esc(clean(v.village))}</div></td>
+      return `<tr data-k="${esc(r.key)}" class="${PEND.edits.has(r.key) ? 'dirty' : ''}"><td class="num muted">${i + 1}</td><td class="appno">${appCell}</td>
+        <td><div class="cname">${esc(clean(v.name))}</div><div class="small muted">Cons. No. ${esc(v.cons)} · ${esc(clean(v.village))}</div></td>
         <td>${esc(sdnName(v))}<div class="small muted">${esc(clean(v.div))}</div></td><td class="num">${esc(v.pv)}${numOr(v.ex) ? `<div class="small muted">+${esc(v.ex)}</div>` : ''}</td>
         <td>${rs ? fmtD(rs) : ''}</td><td class="num">${days !== '' ? (days > 30 ? `<span class="pill bad">${days}</span>` : days > 7 ? `<span class="pill warn">${days}</span>` : days) : ''}</td>
-        <td>${pmTxt}</td>
         <td><input type="date" data-f="date" max="${isoD(today)}" value="${esc(e.date ?? '')}"></td>
         <td><input data-f="reason" value="${esc(e.reason ?? clean(v.remark))}" placeholder="Reason if not released">${r.updatedBy && clean(v.remark) ? `<div class="who">${esc(r.updatedBy)} · ${whenTxt(r.updatedAt)}</div>` : ''}</td></tr>`;
-    }).join('') : '<tr><td colspan="8" class="empty">No pending connections for this filter.</td></tr>') + '</tbody>';
+    }).join('') : '<tr><td colspan="9" class="empty">No pending connections for this filter.</td></tr>') + '</tbody>';
   updatePendBar();
 }
 function pendEdit(key, f, val) {
@@ -581,9 +589,8 @@ function init() {
   $('#pAge').onchange = renderPend; $('#pQ').oninput = renderPend;
   $('#pendTable').addEventListener('change', e => { const tr = e.target.closest('tr[data-k]'); if (tr && e.target.dataset.f) pendEdit(tr.dataset.k, e.target.dataset.f, e.target.value); });
   $('#pendTable').addEventListener('input', e => { const tr = e.target.closest('tr[data-k]'); if (tr && e.target.dataset.f === 'reason') pendEdit(tr.dataset.k, 'reason', e.target.value); });
-  $('#pendTable').addEventListener('click', e => { const k = e.target.dataset.pm; if (k) { const tr = e.target.closest('tr'); tr.querySelector('[data-f=date]').value = e.target.dataset.d; pendEdit(k, 'date', e.target.dataset.d); } });
   $('#btnPendSave').onclick = savePend; $('#btnPendUndo').onclick = () => { PEND.edits.clear(); renderPend(); };
-  $('#btnPendXls').onclick = pendencyExcel; $('#btnPortalDates').onclick = usePortalDates;
+  $('#btnPendXls').onclick = pendencyExcel;
   // charges
   $('#p-chg').addEventListener('input', renderChargesPage); $('#p-chg').addEventListener('change', renderChargesPage);
   $('#btnCFill').onclick = chargesFill; $('#cApp').addEventListener('keydown', e => { if (e.key === 'Enter') chargesFill(); });
