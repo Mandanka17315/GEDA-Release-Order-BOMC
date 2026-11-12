@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GEDA RO Tool · Baroda O&amp;M Circle</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="top">
+  <div class="logo">GEDA <span>RO</span> Tool <span class="small" style="color:#b9c8da;font-weight:400">· Baroda O&amp;M Circle</span></div>
+  <div class="filepill">
+    <span class="dot" id="fileDot"></span>
+    <span class="fname" id="fileName">Connecting…</span>
+    <button class="btn sm ghost" id="btnRefresh" title="Reload data from server">Refresh</button>
+    <button class="btn sm" id="btnLogin">Admin login</button>
+  </div>
+</header>
+<nav class="tabs" id="tabs">
+  <button data-p="dash" data-admin>Dashboard</button>
+  <button data-p="ro" data-admin>Release Order</button>
+  <button data-p="pend">Pending Release <span class="badge" id="pendBadge">0</span></button>
+  <button data-p="chg">GEDA Charges</button>
+  <button data-p="set" data-admin>Settings</button>
+</nav>
+
+<main>
+  <!-- ============ NOT CONFIGURED ============ -->
+  <div id="setupCard" class="card" style="display:none;max-width:640px;margin:30px auto">
+    <h2 style="margin-bottom:6px">Connect to your Supabase project</h2>
+    <div class="muted small" style="margin-bottom:14px">Put the Project URL and anon key in <b>config.js</b> before publishing, so field offices don't see this screen. For a quick test you can paste them here (saved only in this browser).</div>
+    <div class="grid" style="gap:10px">
+      <label class="f">Project URL<input id="cfgUrl" placeholder="https://xxxxxxxx.supabase.co"></label>
+      <label class="f">anon / public key<input id="cfgKey" placeholder="eyJhbGciOi…"></label>
+    </div>
+    <div class="row" style="margin-top:14px"><span class="spacer"></span><button class="btn" id="btnCfgSave">Connect</button></div>
+  </div>
+
+  <!-- ============ DASHBOARD ============ -->
+  <section class="page" id="p-dash">
+    <div class="tiles" id="tiles"></div>
+    <div class="card">
+      <h3>Division-wise status</h3>
+      <table class="t" id="divTable"></table>
+    </div>
+    <div class="card">
+      <div class="row" style="margin-bottom:8px"><h3 style="margin:0">Recent updates</h3><span class="spacer"></span><span class="small muted">Entries by field offices and admins</span></div>
+      <div class="tablewrap" style="max-height:360px"><table class="t" id="actTable"></table></div>
+    </div>
+  </section>
+
+  <!-- ============ RELEASE ORDER ============ -->
+  <section class="page" id="p-ro">
+    <div class="card">
+      <div class="row">
+        <div style="position:relative;flex:1;min-width:260px">
+          <input id="roSearch" placeholder="Application No. (last digits are enough), consumer no. or name" autocomplete="off">
+          <div class="sugg" id="roSugg" style="display:none"></div>
+        </div>
+        <button class="btn" id="btnFetch">Fetch</button>
+        <button class="btn sec" id="btnClear">Clear</button>
+      </div>
+      <div id="roMsg"></div>
+    </div>
+
+    <div id="roForm" style="display:none">
+      <div class="card">
+        <div class="row" style="margin-bottom:10px">
+          <h2 id="roTitle"></h2><span id="roState"></span><span class="spacer"></span>
+          <label class="chk">RO type
+            <select id="f_rotype" style="width:auto"><option value="new">New installation</option><option value="add">Additional load</option></select>
+          </label>
+        </div>
+        <div class="kv" id="portalKv"></div>
+      </div>
+
+      <div class="card">
+        <h3>Consumer &amp; application</h3>
+        <div class="grid g4">
+          <label class="f">GEDA Registration No.<input id="f_reg"></label>
+          <label class="f">Consumer No.<input id="f_cons"></label>
+          <label class="f span2">Name of Consumer<input id="f_name"></label>
+          <label class="f">Category<input id="f_cat"></label>
+          <label class="f">Tariff<input id="f_tariff"></label>
+          <label class="f">Contract load (kW)<input id="f_cl" type="number" step="any"></label>
+          <label class="f">Applied under MSME<select id="f_msme"><option>Yes</option><option>NO</option><option>-</option></select></label>
+          <label class="f">PV capacity applied (kW)<input id="f_pv" type="number" step="any"></label>
+          <label class="f">Existing PV (kW)<input id="f_ex" type="number" step="any"></label>
+          <label class="f">Division<input id="f_div"></label>
+          <label class="f">Sub-division<input id="f_sdn"></label>
+          <label class="f span2">Address<input id="f_addr"></label>
+          <label class="f">Taluka<input id="f_taluka"></label>
+          <label class="f">City/Village<input id="f_village"></label>
+          <label class="f span2">Installer name<input id="f_installer"></label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Agreement, CEI &amp; RO</h3>
+        <div class="grid g4">
+          <label class="f">CEI approval no. / date<input id="f_cei" class="req" placeholder="e.g. 206927 Dt. 31.05.2026"></label>
+          <label class="f">Agreement date<input id="f_agr" type="date" class="req"></label>
+          <label class="f">Release Order No.<input id="f_roNo"></label>
+          <label class="f">Release Order date<input id="f_roDate" type="date"></label>
+          <label class="f">EURJA SR No. (Quotation No.)<input id="f_eurja"></label>
+          <label class="f">Solar policy<input id="f_policy"></label>
+          <label class="f span2">Settlement (General)<input id="f_general"></label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Solar panel &amp; inverter</h3>
+        <div class="grid g4">
+          <label class="f">Panel make<input id="f_pmake" class="req" list="dlPanel"></label>
+          <label class="f">Module capacity (Wp)<input id="f_pwatt" type="number" class="req"></label>
+          <label class="f">No. of modules<input id="f_pnos" type="number" class="req"></label>
+          <label class="f">Total watt<input id="f_ptot" readonly></label>
+          <label class="f">Inverter make<input id="f_imake" class="req" list="dlInv"></label>
+          <label class="f">Inverter capacity (kW)<input id="f_icap" type="number" step="any" class="req"></label>
+          <label class="f">Voltage (V)<select id="f_volt"><option>230</option><option>415</option><option>400</option></select></label>
+          <label class="f">Inverter Sr. No.<input id="f_isr" class="req"></label>
+        </div>
+        <div id="panelWarn"></div>
+        <datalist id="dlPanel"></datalist><datalist id="dlInv"></datalist>
+      </div>
+
+      <div class="card">
+        <div class="row" style="margin-bottom:8px">
+          <h3 style="margin:0">Charges &amp; receipts</h3><span class="spacer"></span>
+          <label class="chk" id="genWrap"><input type="checkbox" id="f_gen"> Add generation meter (policy change)</label>
+          <label class="chk">Same receipt date for all <input type="date" id="f_rcptAll" style="width:auto"></label>
+        </div>
+        <table class="t charges">
+          <thead><tr><th style="width:28%">Item</th><th style="width:16%">Amount (Rs.)</th><th style="width:18%">Formula</th><th style="width:20%">M.R. / Receipt No.</th><th>Receipt date</th></tr></thead>
+          <tbody id="chgRows"></tbody>
+        </table>
+        <div id="chgNote" class="small muted" style="margin-top:6px"></div>
+      </div>
+
+      <div class="card">
+        <h3>Meter release</h3>
+        <div class="grid g4">
+          <label class="f">Bi-directional meter
+            <select id="f_bidirSel"><option value="Pending">Pending</option><option value="date">Installed on date</option><option value="other">Other (text)</option></select>
+          </label>
+          <label class="f" id="bidirDateWrap" style="display:none">Installation date<input id="f_bidirDate" type="date"></label>
+          <label class="f" id="bidirTextWrap" style="display:none">Status text<input id="f_bidirText" placeholder="e.g. RO Cancelled"></label>
+          <label class="f span2">Remarks for pending<input id="f_remark"></label>
+        </div>
+      </div>
+
+      <div class="card row noprint" style="position:sticky;bottom:0;z-index:5">
+        <span id="roSaveInfo" class="small muted"></span><span class="spacer"></span>
+        <button class="btn sec" id="btnWordOnly">Download RO (Word) only</button>
+        <button class="btn sec" id="btnSaveOnly">Save</button>
+        <button class="btn ok" id="btnSaveWord">Save &amp; download RO</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PENDING ============ -->
+  <section class="page" id="p-pend">
+    <div class="card">
+      <div class="row">
+        <label class="f" style="width:220px">Division<select id="pDiv"></select></label>
+        <label class="f" style="width:220px">Sub-division<select id="pSdn"></select></label>
+        <label class="f" style="flex:1;min-width:200px">Search<input id="pQ" placeholder="App no., consumer no., name, village"></label>
+        <label class="f" style="width:170px">Show<select id="pAge"><option value="0">All pending</option><option value="30">Pending &gt; 30 days</option><option value="portal">Meter on portal</option></select></label>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label class="f" style="width:260px" id="byWrap">Your name &amp; designation<input id="pBy" placeholder="e.g. R K Patel, DE Bodeli"></label>
+        <span class="small muted" id="pCount" style="align-self:end"></span><span class="spacer"></span>
+        <button class="btn sec sm" id="btnPortalDates" title="Fill release date from portal 'Date of Installation of Solar Meter'" style="align-self:end">Use portal meter dates</button>
+        <button class="btn sec sm" id="btnPendXls" style="align-self:end">Download Pendency Excel</button>
+      </div>
+    </div>
+    <div class="tablewrap"><table class="t" id="pendTable"></table></div>
+    <div class="savebar" id="pendBar">
+      <b id="pendDirtyN"></b><span class="muted small">Rows with a meter date leave the pending list after saving. Rows with only a reason stay pending.</span>
+      <span class="spacer"></span>
+      <button class="btn sec sm" id="btnPendUndo">Discard</button>
+      <button class="btn ok" id="btnPendSave">Save</button>
+    </div>
+  </section>
+
+  <!-- ============ CHARGES ============ -->
+  <section class="page" id="p-chg">
+    <div class="card noprint">
+      <div class="row">
+        <label class="chk"><input type="radio" name="cType" value="new" checked> New installation</label>
+        <label class="chk"><input type="radio" name="cType" value="add"> Additional load</label>
+        <span class="spacer"></span>
+        <span id="cFillWrap" class="row"><input id="cApp" placeholder="Fill from Application No." style="width:260px"><button class="btn sec" id="btnCFill">Fill</button></span>
+      </div>
+      <div class="grid g4" style="margin-top:12px">
+        <label class="f">Contract load (kW)<input id="cCL" type="number" step="any"></label>
+        <label class="f" id="cPVlbl">PV capacity applied (kW)<input id="cPV" type="number" step="any"></label>
+        <label class="f" id="cEXwrap">Existing PV capacity (kW)<input id="cEX" type="number" step="any"></label>
+        <label class="chk" id="cGenWrap" style="align-self:end"><input type="checkbox" id="cGen"> Include generation meter</label>
+      </div>
+    </div>
+    <div class="card printme" id="chgOut"></div>
+    <div class="row noprint"><span class="spacer"></span><button class="btn sec" onclick="App.printCharges()">Print estimate</button></div>
+  </section>
+
+  <!-- ============ SETTINGS ============ -->
+  <section class="page" id="p-set">
+    <div class="grid g2">
+      <div class="card">
+        <h3>Data on server</h3>
+        <div class="small muted" style="margin-bottom:10px">Download everything as one Excel file: Master (all columns, values), GEDA FORMAT, Pendency and SDN Code sheets.</div>
+        <button class="btn" id="btnFullMaster">Download full Master file</button>
+        <div id="srvInfo" class="small muted" style="margin-top:10px"></div>
+      </div>
+      <div class="card">
+        <h3>Update portal data (GEDA FORMAT)</h3>
+        <div class="small muted" style="margin-bottom:10px">Choose the fresh download from the GEDA portal (.xlsx / .xls / .csv). It replaces the portal data on the server; Master is not touched.</div>
+        <div class="row"><label class="btn sec">Choose portal file<input type="file" id="portalFile" accept=".xlsx,.xls,.csv" hidden></label><span id="portalInfo" class="small muted"></span></div>
+      </div>
+      <div class="card">
+        <h3>Import Master File from Excel</h3>
+        <div class="small muted" style="margin-bottom:10px">One-time move of your existing <i>Master File for GEDA Applications.xlsx</i> to the server: Master, GEDA FORMAT and SDN Code sheets. Rows already on the server with the same Application No. are overwritten by the Excel values.</div>
+        <div class="row"><label class="btn sec">Choose Master File<input type="file" id="masterFile" accept=".xlsx" hidden></label><span id="masterInfo" class="small muted"></span></div>
+      </div>
+      <div class="card">
+        <h3>Release Order letter</h3>
+        <div class="grid g2">
+          <label class="f">Signing officer name<input id="s_seName"></label>
+          <label class="f">Designation<input id="s_seDesig"></label>
+          <label class="f">Circle (as printed)<input id="s_circle"></label>
+          <label class="f">RO No. prefix (optional)<input id="s_roPrefix" placeholder="e.g. SE/BRC/Tech/Solar/"></label>
+          <label class="f">Default solar policy<input id="s_policy"></label>
+          <label class="f">Default settlement text<input id="s_settlement"></label>
+          <label class="f">Word font size (pt)<input id="s_fontSize" type="number" step="0.5"></label>
+          <label class="f">Word font<input id="s_font"></label>
+        </div>
+        <div class="row" style="margin-top:12px"><span class="spacer"></span><button class="btn" id="btnSetSave">Save settings</button></div>
+      </div>
+      <div class="card">
+        <h3>Your own Word templates (optional)</h3>
+        <div class="small muted" style="margin-bottom:10px">Without a template the built-in RO format is used. Upload your mail-merge .docx and each «merge field» is filled from the Master column of the same name; placeholders like <code>{installer_name}</code> also work. Templates are kept in this browser only.</div>
+        <div class="grid" style="gap:10px">
+          <div class="row"><b style="width:120px">New</b><span id="tplNew" class="small muted"></span><span class="spacer"></span>
+            <label class="btn sec sm">Upload<input type="file" accept=".docx" hidden data-tpl="new"></label>
+            <button class="btn sec sm" data-tplclear="new">Remove</button></div>
+          <div class="row"><b style="width:120px">Additional load</b><span id="tplAdd" class="small muted"></span><span class="spacer"></span>
+            <label class="btn sec sm">Upload<input type="file" accept=".docx" hidden data-tpl="add"></label>
+            <button class="btn sec sm" data-tplclear="add">Remove</button></div>
+        </div>
+        <details style="margin-top:10px"><summary class="small">Placeholder list</summary><div class="small muted" id="phList" style="margin-top:6px;line-height:1.8"></div></details>
+      </div>
+      <div class="card">
+        <h3>Charge rates</h3>
+        <div class="small muted" style="margin-bottom:8px">From Rooftop Charges › Estimate Sheet. Saved on the server, so field offices see the same rates.</div>
+        <div id="rateEdit" class="grid g3"></div>
+        <div class="row" style="margin-top:12px"><button class="link" id="btnRateReset">Reset to default rates</button><span class="spacer"></span><button class="btn" id="btnRateSave">Save rates</button></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- login -->
+<div id="loginBox" class="modal" style="display:none">
+  <div class="card" style="width:min(380px,92vw)">
+    <h2 style="margin-bottom:12px">Admin login</h2>
+    <div class="grid" style="gap:10px">
+      <label class="f">E-mail<input id="lgEmail" type="email" autocomplete="username"></label>
+      <label class="f">Password<input id="lgPass" type="password" autocomplete="current-password"></label>
+    </div>
+    <div id="lgMsg"></div>
+    <div class="row" style="margin-top:14px"><span class="spacer"></span><button class="btn sec" id="lgCancel">Cancel</button><button class="btn" id="lgGo">Log in</button></div>
+  </div>
+</div>
+<div id="busy"><div id="busyTxt">Working…</div></div>
+<div id="toast"></div>
+
+<script src="config.js"></script>
+<script src="lib/supabase.js"></script>
+<script src="lib/jszip.min.js"></script>
+<script src="lib/xlsx.full.min.js"></script>
+<script src="js/core.js"></script>
+<script src="js/db.js"></script>
+<script src="js/word.js"></script>
+<script src="js/screens.js"></script>
+</body></html>
