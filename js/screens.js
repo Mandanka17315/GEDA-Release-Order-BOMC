@@ -395,17 +395,20 @@ function pendRows() {
 function renderPend() {
   const rows = pendRows(), today = todaySerial();
   $('#pCount').textContent = `${rows.length} pending connection${rows.length === 1 ? '' : 's'}`;
-  $('#pendTable').innerHTML = `<thead><tr><th style="width:44px" class="num">#</th><th>Application No.</th><th>Consumer</th><th>Sub-division</th><th class="num">PV kW</th><th>RO date</th><th class="num">Days</th><th style="width:150px">Meter installed on</th><th style="min-width:240px">Reason for pending</th></tr></thead><tbody>` +
+  $('#pendTable').innerHTML = `<thead><tr><th style="width:44px" class="num">#</th><th>Consumer</th><th>Sub-division</th><th class="num">PV kW</th><th>RO date</th><th class="num">Days</th><th style="width:150px">Meter installed on</th><th style="min-width:240px">Reason for pending</th></tr></thead><tbody>` +
     (rows.length ? rows.map((r, i) => {
       const v = r.v, rs = roSerial(v), days = rs ? today - rs : '', e = PEND.edits.get(r.key) || {};
-      const appCell = isAdmin() ? `<a href="#" data-open="${esc(r.key)}">${esc(v.app)}</a>` : `<b>${esc(v.app)}</b>`;
-      return `<tr data-k="${esc(r.key)}" class="${PEND.edits.has(r.key) ? 'dirty' : ''}"><td class="num muted">${i + 1}</td><td class="appno">${appCell}</td>
-        <td><div class="cname">${esc(clean(v.name))}</div><div class="small muted">Cons. No. ${esc(v.cons)} · ${esc(clean(v.village))}</div></td>
-        <td>${esc(sdnName(v))}<div class="small muted">${esc(clean(v.div))}</div></td><td class="num">${esc(v.pv)}${numOr(v.ex) ? `<div class="small muted">+${esc(v.ex)}</div>` : ''}</td>
-        <td>${rs ? fmtD(rs) : ''}</td><td class="num">${days !== '' ? (days > 30 ? `<span class="pill bad">${days}</span>` : days > 7 ? `<span class="pill warn">${days}</span>` : days) : ''}</td>
-        <td><input type="date" data-f="date" max="${isoD(today)}" value="${esc(e.date ?? '')}"></td>
-        <td><input data-f="reason" value="${esc(e.reason ?? clean(v.remark))}" placeholder="Reason if not released">${r.updatedBy && clean(v.remark) ? `<div class="who">${esc(r.updatedBy)} · ${whenTxt(r.updatedAt)}</div>` : ''}</td></tr>`;
-    }).join('') : '<tr><td colspan="9" class="empty">No pending connections for this filter.</td></tr>') + '</tbody>';
+      const nm = esc(clean(v.name));
+      const nameCell = isAdmin() ? `<a href="#" data-open="${esc(r.key)}" class="cname">${nm}</a>` : `<div class="cname">${nm}</div>`;
+      const dayTxt = days !== '' ? (days > 30 ? `<span class="pill bad">${days}</span>` : days > 7 ? `<span class="pill warn">${days}</span>` : days) : '';
+      return `<tr data-k="${esc(r.key)}" class="${PEND.edits.has(r.key) ? 'dirty' : ''}"><td class="num muted c-no">${i + 1}</td>
+        <td class="c-cons">${nameCell}<div class="small muted">Cons. No. ${esc(v.cons)} · ${esc(clean(v.village))}</div></td>
+        <td data-l="Sub-division">${esc(sdnName(v))}<div class="small muted">${esc(clean(v.div))}</div></td>
+        <td class="num" data-l="PV kW">${esc(v.pv)}${numOr(v.ex) ? `<span class="small muted"> +${esc(v.ex)}</span>` : ''}</td>
+        <td data-l="RO date">${rs ? fmtD(rs) : ''}</td><td class="num" data-l="Days">${dayTxt}</td>
+        <td data-l="Meter installed on" class="c-in"><input type="date" data-f="date" max="${isoD(today)}" value="${esc(e.date ?? '')}"></td>
+        <td data-l="Reason for pending" class="c-in"><input data-f="reason" value="${esc(e.reason ?? clean(v.remark))}" placeholder="Reason if not released">${r.updatedBy && clean(v.remark) ? `<div class="who">${esc(r.updatedBy)} · ${whenTxt(r.updatedAt)}</div>` : ''}</td></tr>`;
+    }).join('') : '<tr><td colspan="8" class="empty">No pending connections for this filter.</td></tr>') + '</tbody>';
   updatePendBar();
 }
 function pendEdit(key, f, val) {
