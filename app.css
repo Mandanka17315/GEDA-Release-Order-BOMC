@@ -137,3 +137,42 @@ body.field [data-admin]{display:none!important}
 #pendTable .cname{font-weight:600}
 footer.credit{text-align:center;font-size:12px;color:var(--muted);padding:18px 12px 26px;border-top:1px solid var(--line);margin-top:10px}
 @media print{footer.credit{display:block}}
+
+#pendTable a.cname{color:var(--ink);text-decoration:none}
+#pendTable a.cname:hover{color:var(--brand2);text-decoration:underline}
+
+/* ---------- mobile ---------- */
+@media (max-width:760px){
+  header.top{flex-wrap:wrap;padding:8px 12px;gap:6px;position:relative}
+  header.top .logo{font-size:15px;white-space:normal}
+  header.top .logo .small{display:block}
+  .filepill{margin-left:0;width:100%;border-radius:8px}
+  .filepill .fname{max-width:none;flex:1;font-size:12px}
+  nav.tabs{top:0;position:relative}
+  main{padding:10px}
+  .card{padding:12px}
+  #p-pend .row > label.f{width:100%!important;flex:1 1 100%}
+  #p-pend .row > .spacer{display:none}
+  #p-pend .row > .btn{width:100%}
+  input,select{font-size:16px}           /* stops phones zooming in on tap */
+  .tablewrap{max-height:none;overflow:visible;border:0}
+  #pendTable, #pendTable tbody{display:block}
+  #pendTable thead{display:none}
+  #pendTable tbody tr{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px;box-shadow:var(--shadow);position:relative}
+  #pendTable tbody tr:nth-child(even) td{background:transparent}
+  #pendTable tbody tr.dirty{border-color:#e3b23c;background:#fffaeb}
+  #pendTable tbody tr.dirty td{background:transparent}
+  #pendTable tbody td{display:block;border:0!important;padding:0;text-align:left}
+  #pendTable tbody td[data-l]::before{content:attr(data-l);display:block;font-size:11px;color:var(--muted);margin-bottom:1px}
+  #pendTable td.c-no{position:absolute;top:10px;right:12px;font-size:12px}
+  #pendTable td.c-cons{grid-column:1/-1;padding-right:30px}
+  #pendTable td.c-cons .cname{font-size:15px}
+  #pendTable td.c-in{grid-column:1/-1}
+  #pendTable td.empty{grid-column:1/-1}
+  .savebar{position:fixed;left:8px;right:8px;bottom:8px;flex-wrap:wrap;gap:8px;margin:0;z-index:30}
+  .savebar .muted{display:none}
+  .savebar .btn{flex:1}
+  #p-pend{padding-bottom:70px}
+  #toast{left:10px;right:10px;bottom:80px;max-width:none}
+  .grid.g4{grid-template-columns:1fr 1fr}
+}
