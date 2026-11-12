@@ -1,11 +1,11 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GEDA RO Tool · Baroda O&amp;M Circle</title>
+<title>GEDA Release Order - Pendency · Baroda O&amp;M Circle</title>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
 <header class="top">
-  <div class="logo">GEDA <span>RO</span> Tool <span class="small" style="color:#b9c8da;font-weight:400">· Baroda O&amp;M Circle</span></div>
+  <div class="logo">GEDA Release Order <span>– Pendency</span> <span class="small" style="color:#b9c8da;font-weight:400">· Baroda O&amp;M Circle</span></div>
   <div class="filepill">
     <span class="dot" id="fileDot"></span>
     <span class="fname" id="fileName">Connecting…</span>
@@ -162,12 +162,11 @@
         <label class="f" style="width:220px">Division<select id="pDiv"></select></label>
         <label class="f" style="width:220px">Sub-division<select id="pSdn"></select></label>
         <label class="f" style="flex:1;min-width:200px">Search<input id="pQ" placeholder="App no., consumer no., name, village"></label>
-        <label class="f" style="width:170px">Show<select id="pAge"><option value="0">All pending</option><option value="30">Pending &gt; 30 days</option><option value="portal">Meter on portal</option></select></label>
+        <label class="f" style="width:170px">Show<select id="pAge"><option value="0">All pending</option><option value="30">Pending &gt; 30 days</option></select></label>
       </div>
       <div class="row" style="margin-top:10px">
         <label class="f" style="width:260px" id="byWrap">Your name &amp; designation<input id="pBy" placeholder="e.g. R K Patel, DE Bodeli"></label>
         <span class="small muted" id="pCount" style="align-self:end"></span><span class="spacer"></span>
-        <button class="btn sec sm" id="btnPortalDates" title="Fill release date from portal 'Date of Installation of Solar Meter'" style="align-self:end">Use portal meter dates</button>
         <button class="btn sec sm" id="btnPendXls" style="align-self:end">Download Pendency Excel</button>
       </div>
     </div>
@@ -268,6 +267,7 @@
     <div class="row" style="margin-top:14px"><span class="spacer"></span><button class="btn sec" id="lgCancel">Cancel</button><button class="btn" id="lgGo">Log in</button></div>
   </div>
 </div>
+<footer class="credit">Prepared by <b>A H Mandanka</b>, JE Tech-II, Baroda O&amp;M Circle</footer>
 <div id="busy"><div id="busyTxt">Working…</div></div>
 <div id="toast"></div>
 

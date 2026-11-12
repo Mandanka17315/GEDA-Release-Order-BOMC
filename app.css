@@ -124,3 +124,16 @@ td input,td select{padding:4px 6px;font-size:12.5px}
 .modal{position:fixed;inset:0;background:rgba(15,25,40,.45);display:flex;align-items:center;justify-content:center;z-index:80}
 body.field [data-admin]{display:none!important}
 .who{font-size:11.5px;color:var(--muted)}
+
+/* pending list: clearly separated entries */
+#pendTable{border-collapse:separate;border-spacing:0}
+#pendTable tbody td{padding:12px 10px;border-bottom:1px solid #d5dbe4;vertical-align:middle}
+#pendTable tbody tr:nth-child(even) td{background:#f8fafc}
+#pendTable tbody tr:hover td{background:#eef4fb}
+#pendTable tbody tr.dirty td{background:#fff6dc}
+#pendTable tbody tr td:first-child{border-left:3px solid transparent}
+#pendTable tbody tr.dirty td:first-child{border-left-color:var(--accent)}
+#pendTable .appno{white-space:nowrap;font-size:13px}
+#pendTable .cname{font-weight:600}
+footer.credit{text-align:center;font-size:12px;color:var(--muted);padding:18px 12px 26px;border-top:1px solid var(--line);margin-top:10px}
+@media print{footer.credit{display:block}}

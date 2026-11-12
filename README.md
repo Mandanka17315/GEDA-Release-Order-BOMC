@@ -1,4 +1,6 @@
-# GEDA RO Tool – Baroda O&M Circle
+# GEDA Release Order - Pendency – Baroda O&M Circle
+
+Prepared by A H Mandanka, JE Tech-II, Baroda O&M Circle.
 
 Web app for solar rooftop Release Orders. Data is stored on Supabase. The site is hosted free on GitHub Pages.
 
