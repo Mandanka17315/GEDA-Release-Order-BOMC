@@ -186,7 +186,7 @@ const PH_KEYS = 'application_no registration_no consumer_no consumer_name catego
 
 function fmtMerge(val, instr) {
   let s;
-  const dm = instr.match(/\\@\s*"([^"]+)"/);
+  const dm = (m => m ? [m[0], m[1] || m[2]] : null)(instr.match(/\\@\s*(?:"([^"]+)"|([^\s\\]+))/));
   const nm = instr.match(/\\#\s*"?([0#.,]+)"?/);
   if (isD(val)) {
     s = fmtD(val.d);
@@ -199,7 +199,7 @@ function fmtMerge(val, instr) {
   return s;
 }
 function fillXml(xml, vals, missing) {
-  const fieldName = instr => { const m = instr.match(/MERGEFIELD\s+("([^"]+)"|(\S+))/i); return m ? (m[2] || m[3]) : null; };
+  const fieldName = instr => { const m = instr.match(/MERGEFIELD\s+("([^"]+)"|([^\s\\"]+))/i); return m ? (m[2] || m[3]).trim() : null; };
   const lookup = (name, instr) => { const k = norm(name); if (vals.has(k)) return fmtMerge(vals.get(k), instr); missing.add(name); return '«' + name + '»'; };
   // simple fields
   xml = xml.replace(/<w:fldSimple\b[^>]*w:instr="([^"]*)"[^>]*>([\s\S]*?)<\/w:fldSimple>/g, (m, instr, inner) => {
