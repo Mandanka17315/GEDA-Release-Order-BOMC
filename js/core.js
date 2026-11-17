@@ -6,6 +6,12 @@
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const xesc = s => String(s ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// reverse of xesc: turns &amp; &lt; &gt; &quot; &apos; and &#NN; / &#xNN; back into characters (used when reading MERGEFIELD instructions)
+const decodeXml = s => String(s ?? '').replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos);/gi, (m, e) => {
+  const k = e.toLowerCase();
+  if (k[0] === '#') { const n = k[1] === 'x' ? parseInt(k.slice(2), 16) : parseInt(k.slice(1), 10); try { return String.fromCodePoint(n); } catch (_) { return m; } }
+  return { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" }[k];
+});
 const norm = s => String(s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
 const appKey = s => String(s ?? '').toUpperCase().replace(/\s+/g, '');
 const numOr = (v, d = 0) => { const n = parseFloat(String(v ?? '').replace(/,/g, '')); return isFinite(n) ? n : d; };
