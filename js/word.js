@@ -259,6 +259,9 @@ async function makeRO(v, type) {
   if (tpl && tpl.buf) ({ blob, missing } = await buildTemplateDocx(tpl.buf, v, D));
   else blob = await buildBuiltinDocx(D);
   const tail = String(D.app).match(/(\d+)\s*$/);
-  download(blob, safeName(`RO_${tail ? tail[1] : D.app}_${D.name}${type === 'add' ? '_Additional' : ''}.docx`));
+  // File name: GEDA Application No-Consumer No-Consumer Name-Sub Division  e.g. 10266042-3472016469-MEMAN YASINBHAI MAJIDBHAI-BODELI.docx
+  const sdnShort = String(D.sdn ?? '').replace(/\s*,\s*$/, '').replace(/\s*(O\s*&\s*M)?\s*(S\s*\/\s*D(N|IV)?\.?|SUB[\s-]*DIVISION)?\s*$/i, '').trim().toUpperCase();
+  const base = [tail ? tail[1] : D.app, D.cons, D.name, sdnShort].map(x => String(x ?? '').replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, ' ').trim()).filter(Boolean).join('-');
+  download(blob, base.slice(0, 150) + '.docx');
   if (missing.length) toast('Template fields with no matching column: ' + missing.map(esc).join(', '), 'bad', 9000);
 }
