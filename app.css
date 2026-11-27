@@ -188,3 +188,5 @@ table.inv .x{border:0;background:none;color:var(--bad);font-size:18px;cursor:poi
   table.inv td.c-m{grid-column:1/3}
   table.inv td.c-s{grid-column:1/3}
 }
+table.inv.ht .c-s{display:none}
+table.inv:not(.ht) .c-nos{display:none}
