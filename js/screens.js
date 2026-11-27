@@ -563,14 +563,13 @@ function pendencySheet(rows, kind) {
   const aoa = [H, ...rows.map(r => { const v = r.v, rs = roSerial(v); return [clean(v.div), clean(v.app), sdnName(v), n(v.cons), clean(v.name), n(v.pv), n(v.ex), n(v.cl), clean(v.village), rs ? fmtD(rs) : '', 'Pending', showVal(v.eurja), clean(v.tariff), clean(v.remark), rs ? today - rs : '']; })];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols'] = [24, 24, 16, 14, 34, 9, 10, 10, 18, 12, 12, 12, 9, 36, 8].map(w => ({ wch: w }));
-  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: aoa.length - 1, c: H.length - 1 } }) };
-  return ws;
+  return styleSheet(ws, ht ? 'htpend' : 'pend', { freezeX: 0, wrapCols: [4, 13] });
 }
 function pendencyExcel() {
   const ht = PEND.kind === 'ht';
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, pendencySheet(pendRows(), PEND.kind), ht ? 'HT Pendency' : 'Pendency');
   const tag = $('#pSdn').value || $('#pDiv').value || 'All';
-  XLSX.writeFile(wb, safeName(`${ht ? 'HT Solar Pendency' : 'Solar Pendency'} ${tag} ${fmtD(todaySerial())}.xlsx`));
+  saveXlsx(wb, safeName(`${ht ? 'HT Solar Pendency' : 'Solar Pendency'} ${tag} ${fmtD(todaySerial())}.xlsx`));
 }
 
 /* ---------- GEDA Charges page ---------- */

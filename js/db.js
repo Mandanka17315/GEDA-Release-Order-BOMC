@@ -216,7 +216,7 @@ function masterRowsFromAoa(rows) {
 const xnum = v => { if (typeof v !== 'string' || !/^-?\d+(\.\d+)?$/.test(v.trim()) || v.trim().length > 15 || /^0\d/.test(v.trim())) return v ?? ''; const n = Number(v.trim()); return isFinite(n) ? n : v; };
 // HT connection for the Master file split: entered in HT Connection, or (older imported rows) Category "HT…" / Application No. "…/RT/HT…"
 const isHTRow = v => isHT(v) || /^HT/i.test(clean(v.cat)) || /\/RT\/HT/i.test(String(v.app ?? '').replace(/\s+/g, ''));
-function masterSheet(recs, keys, heads) {
+function masterSheet(recs, keys, heads, theme = 'lt') {
   const H = [...keys.map(k => (heads && heads[k]) || MCOL[k] || EXTRA_COL[k]), 'Last Updated', 'Updated By'];
   const aoa = [H], dateCells = [];
   recs.forEach((r, i) => {
@@ -232,9 +232,8 @@ function masterSheet(recs, keys, heads) {
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   for (const [r, c] of dateCells) { const a = XLSX.utils.encode_cell({ r, c }); if (ws[a]) { ws[a].t = 'n'; ws[a].z = 'dd-mm-yyyy'; } }
   ws['!cols'] = H.map((h, i) => ({ wch: i === 4 ? 34 : Math.min(Math.max(String(h).length, 10), 26) }));
-  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(aoa.length - 1, 1), c: H.length - 1 } }) };
-  ws['!freeze'] = { xSplit: 2, ySplit: 1 };
-  return ws;
+  const money = new Set(['meter', 'test', 'conn', 'ss', 'genMeter'].map(k => keys.indexOf(k)).filter(i => i >= 0));
+  return styleSheet(ws, theme, { freezeX: 2, money, wrapCols: [keys.indexOf('name'), keys.indexOf('addr')].filter(i => i >= 0) });
 }
 async function downloadFullMaster() {
   busy(true, 'Collecting data from server…'); await tick();
@@ -243,9 +242,9 @@ async function downloadFullMaster() {
     const ht = S.mRows.filter(r => isHTRow(r.v)), lt = S.mRows.filter(r => !isHTRow(r.v));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, masterSheet(lt, ALLKEYS), 'LT Connections');
-    XLSX.utils.book_append_sheet(wb, masterSheet(ht, ALLKEYS), 'HT Connections');
+    XLSX.utils.book_append_sheet(wb, masterSheet(ht, ALLKEYS, null, 'ht'), 'HT Connections');
     busy(true, 'Writing Excel…'); await tick();
-    XLSX.writeFile(wb, `Master File for GEDA Applications ${fmtD(todaySerial())}.xlsx`, { compression: true });
+    await saveXlsx(wb, `Master File for GEDA Applications ${fmtD(todaySerial())}.xlsx`);
     toast(`Master downloaded: ${lt.length} LT and ${ht.length} HT connections.`, 'ok');
     refreshAll();
   } catch (e) { toast('Download failed: ' + esc(e.message), 'bad', 8000); }
@@ -285,12 +284,13 @@ async function downloadHTMaster() {
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     for (const [r, c] of dateCells) { const a = XLSX.utils.encode_cell({ r, c }); if (ws[a]) { ws[a].t = 'n'; ws[a].z = 'dd-mm-yyyy'; } }
     ws['!cols'] = H.map((h, i) => ({ wch: i === 4 ? 34 : Math.min(Math.max(String(h).length, 10), 26) }));
-    ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: aoa.length - 1, c: H.length - 1 } }) };
+    const money = new Set(H.map((h, i) => /Charge/i.test(h) && !/Receip|Date/i.test(h) ? i : -1).filter(i => i >= 0));
+    styleSheet(ws, 'ht', { freezeX: 2, money, wrapCols: [H.indexOf('Name of Consumer'), H.indexOf('Adress')].filter(i => i >= 0) });
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'HT Master');
     XLSX.utils.book_append_sheet(wb, pendencySheet(rows.filter(r => bidirState(r.v) === 'pending'), 'ht'), 'HT Pendency');
     busy(true, 'Writing Excel…'); await tick();
-    XLSX.writeFile(wb, `HT Solar Master File ${fmtD(todaySerial())}.xlsx`, { compression: true });
+    await saveXlsx(wb, `HT Solar Master File ${fmtD(todaySerial())}.xlsx`);
     toast(`HT Solar Master downloaded: ${rows.length} HT connection${rows.length === 1 ? '' : 's'}.`, 'ok');
     refreshAll();
   } catch (e) { console.error(e); toast('Download failed: ' + esc(e.message), 'bad', 8000); }

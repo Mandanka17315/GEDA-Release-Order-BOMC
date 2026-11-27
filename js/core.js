@@ -128,3 +128,71 @@ function busy(on, txt) { $('#busy').classList.toggle('on', !!on); if (txt) $('#b
 const tick = () => new Promise(r => setTimeout(r, 30));
 function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000); }
 const safeName = s => String(s).replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, ' ').trim().slice(0, 90);
+
+/* ---------------- formatted Excel output (needs lib/xlsx.full.min.js = xlsx-js-style) ---------------- */
+const XL_THEME = { lt: '1F4E78', ht: '833C0B', pend: '1F4E78', htpend: '833C0B' };   // header fill: blue for LT, brown for HT
+/** Header row: bold white on a dark fill, wrapped and centred. Data rows: borders, banding, dates centred. */
+function styleSheet(ws, theme = 'lt', o = {}) {
+  if (!ws || !ws['!ref']) return ws;
+  const rg = XLSX.utils.decode_range(ws['!ref']), head = XL_THEME[theme] || theme;
+  const thin = c => ({ style: 'thin', color: { rgb: c } });
+  const hb = { top: thin('FFFFFF'), bottom: thin('FFFFFF'), left: thin('FFFFFF'), right: thin('FFFFFF') };
+  const db = { top: thin('C9D3E0'), bottom: thin('C9D3E0'), left: thin('C9D3E0'), right: thin('C9D3E0') };
+  const font = { name: 'Arial', sz: 10, color: { rgb: '1F2937' } };
+  const wrapCols = new Set(o.wrapCols || []);
+  for (let r = rg.s.r; r <= rg.e.r; r++) {
+    const band = r > 0 && r % 2 === 0;
+    for (let c = rg.s.c; c <= rg.e.c; c++) {
+      const a = XLSX.utils.encode_cell({ r, c });
+      let cell = ws[a];
+      if (!cell) { if (r === 0) continue; cell = ws[a] = { t: 's', v: '' }; }
+      if (r === 0) {
+        cell.s = { font: { name: 'Arial', sz: 10, bold: true, color: { rgb: 'FFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: head } },
+          alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border: hb };
+        continue;
+      }
+      const isDate = cell.t === 'n' && cell.z && /y/i.test(cell.z), isNumC = cell.t === 'n' && !isDate;
+      cell.s = { font, border: db, alignment: { vertical: 'top', horizontal: isDate ? 'center' : isNumC ? 'right' : 'left', wrapText: true } };
+      if (band) cell.s.fill = { patternType: 'solid', fgColor: { rgb: 'F2F6FA' } };
+      if (isNumC && o.money && o.money.has(c)) cell.z = '#,##0';
+    }
+  }
+  // column widths from the contents (header words, then values; capped so long text wraps)
+  const W = [];
+  for (let c = rg.s.c; c <= rg.e.c; c++) {
+    const h = ws[XLSX.utils.encode_cell({ r: 0, c })];
+    let w = Math.max(8, ...String(h ? h.v : '').split(/\s+/).map(x => x.length + 2));
+    for (let r = 1; r <= Math.min(rg.e.r, 1500); r++) {
+      const cell = ws[XLSX.utils.encode_cell({ r, c })]; if (!cell || cell.v === '' || cell.v == null) continue;
+      const len = cell.t === 'n' && cell.z && /y/i.test(cell.z) ? 11 : String(cell.v).length + 2;
+      if (len > w) w = len;
+    }
+    W.push({ wch: Math.min(w, wrapCols.has(c) ? 36 : 30) });
+  }
+  ws['!cols'] = W;
+  ws['!rows'] = [{ hpt: o.headH || 42 }];
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: rg.s.c }, e: { r: Math.max(rg.e.r, 1), c: rg.e.c } }) };
+  ws.__freeze = { x: o.freezeX ?? 0, y: 1 };
+  return ws;
+}
+/** Write the workbook and freeze the header row (and first columns) of each sheet, then download. */
+async function saveXlsx(wb, name) {
+  const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx', compression: true, cellStyles: true });
+  let blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  try {
+    const zip = await JSZip.loadAsync(buf);
+    for (let i = 0; i < wb.SheetNames.length; i++) {
+      const fz = (wb.Sheets[wb.SheetNames[i]] || {}).__freeze; if (!fz) continue;
+      const path = `xl/worksheets/sheet${i + 1}.xml`; const f = zip.file(path); if (!f) continue;
+      let x = await f.async('string');
+      const cell = XLSX.utils.encode_cell({ r: fz.y, c: fz.x });
+      const pane = `<pane${fz.x ? ` xSplit="${fz.x}"` : ''} ySplit="${fz.y}" topLeftCell="${cell}" activePane="${fz.x ? 'bottomRight' : 'bottomLeft'}" state="frozen"/>`;
+      const views = `<sheetViews><sheetView workbookViewId="0">${pane}</sheetView></sheetViews>`;
+      if (/<sheetViews>[\s\S]*?<\/sheetViews>/.test(x)) x = x.replace(/<sheetViews>[\s\S]*?<\/sheetViews>/, views);
+      else x = x.replace(/(<sheetFormatPr|<cols>|<sheetData)/, views + '$1');
+      zip.file(path, x);
+    }
+    blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', mimeType: blob.type });
+  } catch (e) { console.warn('freeze panes not added', e); }
+  download(blob, name);
+}
