@@ -185,6 +185,8 @@ const F = {
 };
 const DATEF = { agr: 'f_agr', roDate: 'f_roDate' };
 const NUMK = new Set(['cl', 'pv', 'ex', 'pwatt', 'pnos', 'icap', 'volt']);
+const HT_CHG = new Set(['conn', 'ss']);   // HT connections pay only connectivity and system strengthening
+const chgOn = k => RO_MODE !== 'ht' || HT_CHG.has(k);
 const CHG = [
   { k: 'meter', r: 'meterR', label: 'Bi-directional meter + SMC box', calc: c => c.meterSmc, fx: c => `Meter ${inr(c.meter)} + SMC ${inr(c.smc)}${c.gen ? ' + Gen. meter ' + inr(c.gen) : ''}` },
   { k: 'test', r: 'testR', label: 'Meter testing charges', calc: c => c.test, fx: c => `GST/liability on meter, SMC, testing: Rs. ${inr(c.liability)}` },
@@ -207,6 +209,7 @@ function applyRoMode() {
   $('#btnWordOnly').style.display = ht ? 'none' : '';
   $('#btnSaveWord').style.display = ht ? 'none' : '';
   $('#btnSaveOnly').classList.toggle('ok', ht); $('#btnSaveOnly').classList.toggle('sec', !ht);
+  if (CUR) updateCalc();
 }
 /* ---------- inverters: one or more per application ----------
    Stored in the same Master columns: make "A, B", capacity "50 + 30", Sr. No. "S1, S2". */
@@ -330,10 +333,12 @@ function bidirUI() { const s = $('#f_bidirSel').value; $('#bidirDateWrap').style
 function curCalc() { return calcCharges({ type: $('#f_rotype').value, cl: $('#f_cl').value, pv: $('#f_pv').value, ex: $('#f_ex').value, gen: $('#f_gen').checked }); }
 function updateCalc() {
   if (!CUR) return;
-  const c = curCalc(); let tot = 0;
-  $('#genWrap').style.display = $('#f_rotype').value === 'add' ? '' : 'none';
+  const c = curCalc(); let tot = 0; const htm = RO_MODE === 'ht';
+  $('#genWrap').style.display = $('#f_rotype').value === 'add' && !htm ? '' : 'none';
   for (const ch of CHG) {
-    const el = $('#c_' + ch.k), fv = ch.calc(c);
+    const el = $('#c_' + ch.k), fv = ch.calc(c), on = chgOn(ch.k);
+    el.closest('tr').style.display = on ? '' : 'none';
+    if (!on) { el.value = 0; el.classList.remove('override'); $('#r_' + ch.k).value = ''; $('#d_' + ch.k).value = ''; continue; }
     if (!CUR.over[ch.k]) el.value = fv;
     const differs = numOr(el.value) !== fv;
     el.classList.toggle('override', differs);
@@ -341,9 +346,11 @@ function updateCalc() {
     tot += numOr(el.value);
   }
   $('#c_total').textContent = inr(tot);
-  $('#c_grand').textContent = `With GST/liability Rs. ${inr(c.liability)} → Rs. ${inr(tot + c.liability)}`;
+  $('#c_total').previousElementSibling.textContent = htm ? 'Total' : 'Total (excluding GST/liability)';
+  $('#c_grand').textContent = htm ? '' : `With GST/liability Rs. ${inr(c.liability)} → Rs. ${inr(tot + c.liability)}`;
   const ht = /^HT/i.test(clean($('#f_cat').value)) || /^HT/i.test(clean($('#f_tariff').value));
-  $('#chgNote').innerHTML = (ht ? '<div class="note warn">HT consumer: the formula follows the LT estimate sheet. Enter the amounts as per the HT estimate.</div>' : '') + esc(c.notes.join(' '));
+  $('#chgNote').innerHTML = htm ? '<div class="note info">HT connection: only <b>Connectivity charges</b> and <b>System strengthening charges</b> are payable. Check the amounts against the HT estimate.</div>'
+    : (ht ? '<div class="note warn">HT consumer: the formula follows the LT estimate sheet. Enter the amounts as per the HT estimate.</div>' : '') + esc(c.notes.join(' '));
 }
 function panelCheck() {
   const w = numOr($('#f_pwatt').value), n = numOr($('#f_pnos').value);
@@ -362,11 +369,11 @@ function readForm() {
   v.icheck = capParts(v.icap).length && isNum(v.pv) ? (sumCap(v.icap) <= v.pv ? 'Yes' : 'NO') : '';
   const c = curCalc();
   for (const ch of CHG) {
-    const a = $('#c_' + ch.k).value; v[ch.k] = isNum(a) ? +a : 0;
+    const a = $('#c_' + ch.k).value; v[ch.k] = chgOn(ch.k) && isNum(a) ? +a : 0;
     const r = joinReceipt($('#r_' + ch.k).value, $('#d_' + ch.k).value);
     v[ch.r] = r || (v[ch.k] ? '' : '0');
   }
-  v.roType = $('#f_rotype').value; v.genMeter = v.roType === 'add' && $('#f_gen').checked ? c.gen : '';
+  v.roType = $('#f_rotype').value; v.genMeter = v.roType === 'add' && $('#f_gen').checked && RO_MODE !== 'ht' ? c.gen : '';
   v.agrYes = 'YES';
   v.connType = RO_MODE === 'ht' ? 'HT' : '';
   const bs = $('#f_bidirSel').value;
