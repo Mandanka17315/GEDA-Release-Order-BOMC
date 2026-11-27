@@ -16,7 +16,9 @@
 <nav class="tabs" id="tabs">
   <button data-p="dash" data-admin>Dashboard</button>
   <button data-p="ro" data-admin>Release Order</button>
+  <button data-p="ht" data-admin>HT Connection</button>
   <button data-p="pend">Pending Release <span class="badge" id="pendBadge">0</span></button>
+  <button data-p="htp">HT Solar Pendency <span class="badge" id="htBadge">0</span></button>
   <button data-p="chg">GEDA Charges</button>
   <button data-p="set" data-admin>Settings</button>
 </nav>
@@ -48,6 +50,7 @@
 
   <!-- ============ RELEASE ORDER ============ -->
   <section class="page" id="p-ro">
+    <div class="note info" id="htModeNote" style="display:none"><b>HT Connection</b> – enter the HT solar connection details and click <b>Save</b>. No Release Order is made. Saved entries appear in <b>HT Solar Pendency</b> until the release date is entered.</div>
     <div class="card">
       <div class="row">
         <div style="position:relative;flex:1;min-width:260px">
@@ -93,12 +96,12 @@
       </div>
 
       <div class="card">
-        <h3>Agreement, CEI &amp; RO</h3>
+        <h3 id="hAgr">Agreement, CEI &amp; RO</h3>
         <div class="grid g4">
           <label class="f">CEI approval no. / date<input id="f_cei" class="req" placeholder="e.g. 206927 Dt. 31.05.2026"></label>
           <label class="f">Agreement date<input id="f_agr" type="date" class="req"></label>
-          <label class="f">Release Order No.<input id="f_roNo"></label>
-          <label class="f">Release Order date<input id="f_roDate" type="date"></label>
+          <label class="f" id="roNoWrap">Release Order No.<input id="f_roNo"></label>
+          <label class="f" id="roDateWrap"><span id="roDateLbl">Release Order date</span><input id="f_roDate" type="date"></label>
           <label class="f">EURJA SR No. (Quotation No.)<input id="f_eurja"></label>
           <label class="f">Solar policy<input id="f_policy"></label>
           <label class="f span2">Settlement (General)<input id="f_general"></label>
@@ -135,9 +138,9 @@
       </div>
 
       <div class="card">
-        <h3>Meter release</h3>
+        <h3 id="hRel">Meter release</h3>
         <div class="grid g4">
-          <label class="f">Bi-directional meter
+          <label class="f"><span id="bidirLbl">Bi-directional meter</span>
             <select id="f_bidirSel"><option value="Pending">Pending</option><option value="date">Installed on date</option><option value="other">Other (text)</option></select>
           </label>
           <label class="f" id="bidirDateWrap" style="display:none">Installation date<input id="f_bidirDate" type="date"></label>
@@ -157,6 +160,7 @@
 
   <!-- ============ PENDING ============ -->
   <section class="page" id="p-pend">
+    <h2 id="pendHead" style="margin:0 0 10px">Pending Release</h2>
     <div class="card">
       <div class="row">
         <label class="f fdiv" style="width:220px">Division<select id="pDiv"></select></label>
