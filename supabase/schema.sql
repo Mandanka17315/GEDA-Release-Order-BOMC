@@ -31,6 +31,8 @@ create table if not exists public.master (
   updated_at  timestamptz not null default now(),
   updated_by  text
 );
+-- HT solar connections (no RO issued) are kept in the same table with conn_type = 'HT'
+alter table public.master add column if not exists conn_type text;
 create index if not exists master_bidir_idx on public.master (bidir);
 create index if not exists master_div_idx on public.master (div);
 
@@ -117,17 +119,18 @@ grant usage, select on sequence public.activity_id_seq to authenticated;
 
 -- ---------- field office functions (work without login) ---------------
 
--- Pending release list, with the portal's meter date when the portal has one
+-- Pending release list (LT and HT), with the portal's meter date when the portal has one
+drop function if exists public.pending_list();
 create or replace function public.pending_list()
 returns table (
   app_no text, name text, cons text, pv text, ex text, cl text, div text, sdn text, village text,
   ro_date text, remark text, eurja text, tariff text, updated_by text, updated_at timestamptz,
-  portal_status text, portal_meter_date text
+  portal_status text, portal_meter_date text, conn_type text
 )
 language sql stable security definer set search_path = public as $$
   select m.app_no, m.name, m.cons, m.pv, m.ex, m.cl, m.div, m.sdn, m.village,
          m.ro_date, m.remark, m.eurja, m.tariff, m.updated_by, m.updated_at,
-         g.status, g.meter_date
+         g.status, g.meter_date, m.conn_type
   from public.master m
   left join public.geda g on g.app_key = m.app_key
   where lower(trim(coalesce(m.bidir, ''))) = 'pending'
