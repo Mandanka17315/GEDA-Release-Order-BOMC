@@ -208,6 +208,35 @@ function applyRoMode() {
   $('#btnSaveWord').style.display = ht ? 'none' : '';
   $('#btnSaveOnly').classList.toggle('ok', ht); $('#btnSaveOnly').classList.toggle('sec', !ht);
 }
+/* ---------- inverters: one or more per application ----------
+   Stored in the same Master columns: make "A, B", capacity "50 + 30", Sr. No. "S1, S2". */
+const capParts = s => String(s ?? '').split('+').map(x => x.trim()).filter(x => x !== '');
+const sumCap = s => +capParts(s).reduce((a, x) => a + numOr(x), 0).toFixed(3);
+function invSplit(make, cap, sr) {
+  make = clean(showVal(make)); sr = clean(showVal(sr)); const caps = capParts(showVal(cap));
+  const n = Math.max(caps.length, 1);
+  if (n === 1) return [{ m: make, c: caps[0] ?? '', s: sr }];
+  const ms = make.split(',').map(clean), ss = sr.split(',').map(clean);
+  return caps.map((c, i) => ({ m: ms.length === n ? ms[i] : (i === 0 || ms.length === 1 ? make : ''), c, s: ss.length === n ? ss[i] : (i === 0 ? sr : '') }));
+}
+function renderInv(rows) {
+  if (!rows.length) rows = [{ m: '', c: '', s: '' }];
+  $('#invRows').innerHTML = rows.map((r, i) => `<tr><td class="num muted c-n">${i + 1}</td>
+    <td class="c-m"><input data-i="m" list="dlInv" placeholder="Make" value="${esc(r.m)}"></td>
+    <td><input data-i="c" type="number" step="any" placeholder="kW" value="${esc(r.c)}"></td>
+    <td class="c-s"><input data-i="s" placeholder="Sr. No." value="${esc(r.s)}"></td>
+    <td>${rows.length > 1 ? '<button type="button" class="x" title="Remove this inverter" data-invdel>×</button>' : ''}</td></tr>`).join('');
+  syncInv();
+}
+function invRowsNow() { return $$('#invRows tr').map(tr => ({ m: clean(tr.querySelector('[data-i=m]').value), c: clean(tr.querySelector('[data-i=c]').value), s: clean(tr.querySelector('[data-i=s]').value) })); }
+function syncInv() {
+  const rows = invRowsNow().filter((r, i, a) => a.length === 1 || r.m || r.c || r.s);
+  $('#f_imake').value = rows.map(r => r.m).join(', ');
+  $('#f_icap').value = rows.map(r => r.c || '0').join(' + ').replace(/^0$/, '');
+  $('#f_isr').value = rows.map(r => r.s).join(', ');
+  const t = sumCap($('#f_icap').value), n = rows.length;
+  $('#invTot').innerHTML = n > 1 ? `<b>${n} inverters</b> · total capacity <b>${t} kW</b>` : '';
+}
 const entered = () => RO_MODE === 'ht' ? 'HT entered' : 'RO entered';
 
 function splitReceipt(s) {
@@ -262,6 +291,7 @@ function fillForm() {
   } else {
     const mv = clean(v.msme); $('#f_msme').value = /^y/i.test(mv) ? 'Yes' : /^n/i.test(mv) ? 'NO' : '-';
   }
+  renderInv(invSplit(pick('imake'), pick('icap'), pick('isr')));
   if (!['230', '415', '400'].includes(String($('#f_volt').value))) { const o = document.createElement('option'); o.textContent = showVal(v.volt) || '230'; $('#f_volt').appendChild(o); $('#f_volt').value = o.textContent; }
   const agr = rec ? parseDateLoose(v.agr) : parseDateLoose(gv(g, 'Agreement Signing Date'));
   $('#f_agr').value = agr ? isoD(agr) : '';
@@ -318,8 +348,8 @@ function updateCalc() {
 function panelCheck() {
   const w = numOr($('#f_pwatt').value), n = numOr($('#f_pnos').value);
   $('#f_ptot').value = w && n ? w * n : '';
-  const msgs = [], pv = numOr($('#f_pv').value), ic = numOr($('#f_icap').value), tot = w * n / 1000;
-  if (ic && pv && ic > pv) msgs.push(`Inverter capacity ${ic} kW is more than the applied PV capacity ${pv} kW.`);
+  const msgs = [], pv = numOr($('#f_pv').value), ic = sumCap($('#f_icap').value), tot = w * n / 1000;
+  if (ic && pv && ic > pv) msgs.push(`${capParts($('#f_icap').value).length > 1 ? 'Total inverter' : 'Inverter'} capacity ${ic} kW is more than the applied PV capacity ${pv} kW.`);
   if (tot && pv && tot < pv) msgs.push(`Total module capacity ${tot.toFixed(2)} kWp is less than the PV capacity ${pv} kW.`);
   $('#panelWarn').innerHTML = msgs.map(m => `<div class="note warn">${esc(m)}</div>`).join('');
 }
@@ -329,7 +359,7 @@ function readForm() {
   for (const [k, id] of Object.entries(DATEF)) { const s = $('#' + id).value; v[k] = s ? { d: parseDateLoose(s) } : ''; }
   v.app = CUR.rec ? clean(CUR.rec.v.app) : (CUR.g ? CUR.g.__app : clean($('#roSearch').value).toUpperCase());
   v.ptot = numOr($('#f_ptot').value) || '';
-  v.icheck = isNum(v.icap) && isNum(v.pv) ? (v.icap <= v.pv ? 'Yes' : 'NO') : '';
+  v.icheck = capParts(v.icap).length && isNum(v.pv) ? (sumCap(v.icap) <= v.pv ? 'Yes' : 'NO') : '';
   const c = curCalc();
   for (const ch of CHG) {
     const a = $('#c_' + ch.k).value; v[ch.k] = isNum(a) ? +a : 0;
@@ -347,7 +377,8 @@ function validate(v) {
   const miss = [];
   if (!v.name) miss.push('Name of consumer'); if (!v.cons) miss.push('Consumer No.'); if (!isNum(v.pv)) miss.push('PV capacity');
   if (!v.cei) miss.push('CEI approval'); if (!v.agr) miss.push('Agreement date'); if (!v.pmake) miss.push('Panel make');
-  if (!v.imake) miss.push('Inverter make'); if (!v.isr) miss.push('Inverter Sr. No.'); if (!v.roDate) miss.push(RO_MODE === 'ht' ? 'Entry date' : 'RO date');
+  const inv = invRowsNow();
+  inv.forEach((r, i) => { const t = inv.length > 1 ? ` (inverter ${i + 1})` : ''; if (!r.m) miss.push('Inverter make' + t); if (!isNum(r.c)) miss.push('Inverter capacity' + t); if (!r.s) miss.push('Inverter Sr. No.' + t); }); if (!v.roDate) miss.push(RO_MODE === 'ht' ? 'Entry date' : 'RO date');
   for (const c of CHG) if (v[c.k] > 0 && !$('#r_' + c.k).value.trim()) miss.push(c.label + ' receipt');
   return miss;
 }
@@ -628,8 +659,11 @@ function init() {
     const id = e.target.id;
     if (id.startsWith('c_')) { CUR.over[id.slice(2)] = 'user'; updateCalc(); }
     if (['f_cl', 'f_pv', 'f_ex', 'f_cat', 'f_tariff'].includes(id)) { updateCalc(); panelCheck(); }
-    if (['f_pwatt', 'f_pnos', 'f_icap'].includes(id)) panelCheck();
+    if (['f_pwatt', 'f_pnos'].includes(id)) panelCheck();
+    if (e.target.dataset.i) { syncInv(); panelCheck(); }
   });
+  $('#btnInvAdd').onclick = () => { const r = invRowsNow(); const last = r[r.length - 1] || {}; r.push({ m: last.m || '', c: '', s: '' }); renderInv(r); const ins = $$('#invRows [data-i=c]'); ins[ins.length - 1].focus(); };
+  $('#invRows').addEventListener('click', e => { if (!e.target.closest('[data-invdel]')) return; const tr = e.target.closest('tr'), i = $$('#invRows tr').indexOf(tr); const r = invRowsNow(); r.splice(i, 1); renderInv(r); panelCheck(); });
   $('#roForm').addEventListener('change', e => {
     const id = e.target.id;
     if (id === 'f_rotype' || id === 'f_gen') updateCalc();

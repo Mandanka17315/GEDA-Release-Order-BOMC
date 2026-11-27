@@ -43,7 +43,7 @@ function roData(v, type) {
     cl: isNum(v.cl) ? +v.cl : clean(v.cl), msme: clean(v.msme) || '-', sdn: clean(v.sdn), div: clean(v.div), circle: SET.circle,
     pv: fix2(pv), ex: fix2(ex), add: fix2(pv), total: fix2(pv + ex),
     cei: clean(showVal(v.cei)), agr: fmtD(parseDateLoose(v.agr)), roNo: clean(v.roNo), roDate: fmtD(parseDateLoose(v.roDate)),
-    pmake: clean(v.pmake), pwatt: clean(v.pwatt), pnos: clean(v.pnos), ptot: clean(v.ptot), imake: clean(v.imake), icap: fix2(v.icap),
+    pmake: clean(v.pmake), pwatt: clean(v.pwatt), pnos: clean(v.pnos), ptot: clean(v.ptot), imake: clean(v.imake), icap: capParts(showVal(v.icap)).length > 1 ? `${capParts(showVal(v.icap)).join(' + ')} = ${sumCap(showVal(v.icap))}` : fix2(v.icap), icapTot: sumCap(showVal(v.icap)), icapRaw: showVal(v.icap), invN: capParts(showVal(v.icap)).length || 1,
     volt: clean(v.volt), isr: clean(v.isr),
     meter: isNum(v.meter) ? +v.meter : clean(v.meter) || 0, meterR: rc(v.meterR), test: isNum(v.test) ? +v.test : clean(v.test) || 0, testR: rc(v.testR),
     conn: isNum(v.conn) ? +v.conn : clean(v.conn) || 0, connR: rc(v.connR), ss: isNum(v.ss) ? +v.ss : clean(v.ss) || 0, ssR: rc(v.ssR),
@@ -120,7 +120,10 @@ function letterBody(D) {
   R(8, "Strengthening of DISCOM's System (if any) as per TFR", `**Rs. ${D.ss}** – Paid vide M.R. No. **${D.ssR}**`);
   R(9, 'Chief Electrical Inspector’s / Electrical Inspector’s approval No', `**${D.cei}**`);
   R(10, 'Details of Solar Panel', [`Make of solar panel: **${D.pmake}**`, `Capacity of solar PV cell Modules: **${D.pwatt} Wp**`, `No. of Modules: **${D.pnos}**`, `Total Watt: **${D.ptot} Watt**`]);
-  R(11, 'Details of Inverter', [`Make: **${D.imake}**`, `Capacity: **${D.icap} KW**`, `Voltage: **${D.volt} V**`, `Sr. No.: **${D.isr}**`]);
+  const INV = invSplit(D.imake, D.icapRaw, D.isr);
+  R(11, 'Details of Inverter', INV.length > 1
+    ? [...INV.map((r, i) => `Inverter ${i + 1}: Make **${r.m}**, Capacity **${fix2(r.c)} KW**, Sr. No. **${r.s}**`), `Total capacity: **${D.icapTot} KW** (${INV.length} inverters)`, `Voltage: **${D.volt} V**`]
+    : [`Make: **${D.imake}**`, `Capacity: **${D.icap} KW**`, `Voltage: **${D.volt} V**`, `Sr. No.: **${D.isr}**`]);
   if (D.installer) R(12, 'Name of Installer', `**${D.installer}**`);
   x.push(TABLE(w, rows));
   x.push(P('', { after: 60 }));
@@ -176,13 +179,13 @@ function mergeValues(v, D) {
     sub_division: D.sdn, division: D.div, circle: D.circle, pv_capacity: D.pv, existing_capacity: D.ex, additional_capacity: D.add, total_capacity: D.total, settlement: D.general,
     meter_smc_charges: D.meter, meter_smc_receipt: D.meterR, testing_charges: D.test, testing_receipt: D.testR, connectivity_charges: D.conn, connectivity_receipt: D.connR,
     ss_charges: D.ss, ss_receipt: D.ssR, cei_approval: D.cei, agreement_date: D.agr, ro_no: D.roNo, ro_date: D.roDate, panel_make: D.pmake, panel_wattage: D.pwatt, modules: D.pnos,
-    total_watt: D.ptot, inverter_make: D.imake, inverter_capacity: D.icap, voltage: D.volt, inverter_sr: D.isr, installer_name: D.installer, address: D.addr, village: D.village,
+    total_watt: D.ptot, inverter_make: D.imake, inverter_capacity: D.icap, inverter_total_capacity: D.icapTot, inverter_count: D.invN, voltage: D.volt, inverter_sr: D.isr, installer_name: D.installer, address: D.addr, village: D.village,
     taluka: D.taluka, eurja_no: D.eurja, phase: D.phase, se_name: D.seName, se_designation: D.seDesig, policy: D.policy
   };
   for (const [k, val] of Object.entries(ph)) { vals.set('{' + k + '}', val); if (!vals.has(norm(k))) vals.set(norm(k), val); }
   return vals;
 }
-const PH_KEYS = 'application_no registration_no consumer_no consumer_name category tariff contract_load msme sub_division division circle pv_capacity existing_capacity additional_capacity total_capacity settlement meter_smc_charges meter_smc_receipt testing_charges testing_receipt connectivity_charges connectivity_receipt ss_charges ss_receipt cei_approval agreement_date ro_no ro_date panel_make panel_wattage modules total_watt inverter_make inverter_capacity voltage inverter_sr installer_name address village taluka eurja_no phase se_name se_designation policy'.split(' ');
+const PH_KEYS = 'application_no registration_no consumer_no consumer_name category tariff contract_load msme sub_division division circle pv_capacity existing_capacity additional_capacity total_capacity settlement meter_smc_charges meter_smc_receipt testing_charges testing_receipt connectivity_charges connectivity_receipt ss_charges ss_receipt cei_approval agreement_date ro_no ro_date panel_make panel_wattage modules total_watt inverter_make inverter_capacity inverter_total_capacity inverter_count voltage inverter_sr installer_name address village taluka eurja_no phase se_name se_designation policy'.split(' ');
 
 function fmtMerge(val, instr) {
   let s;
