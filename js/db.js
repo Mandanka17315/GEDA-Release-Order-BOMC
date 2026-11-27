@@ -14,8 +14,8 @@ const MCOL = {
   bidir: 'Bi-Directional meter installed', eurja: 'EURJA SR NO.', general: 'General', tariff: 'TARIFF', msme: 'APPLIED UNDER MSME',
   policy: 'Solar Policy', remark: 'Remarks For Pending'
 };
-const EXTRA_COL = { installer: 'Installer Name', roType: 'RO Type', genMeter: 'Generation Meter Charges' };
-const KEY2DB = { app: 'app_no', meterR: 'meter_r', testR: 'test_r', connR: 'conn_r', ssR: 'ss_r', agrYes: 'agr_yes', roNo: 'ro_no', roDate: 'ro_date', roType: 'ro_type', genMeter: 'gen_meter' };
+const EXTRA_COL = { installer: 'Installer Name', roType: 'RO Type', genMeter: 'Generation Meter Charges', connType: 'Connection Type' };
+const KEY2DB = { app: 'app_no', meterR: 'meter_r', testR: 'test_r', connR: 'conn_r', ssR: 'ss_r', agrYes: 'agr_yes', roNo: 'ro_no', roDate: 'ro_date', roType: 'ro_type', genMeter: 'gen_meter', connType: 'conn_type' };
 const ALLKEYS = [...Object.keys(MCOL), ...Object.keys(EXTRA_COL)];
 const dbCol = k => KEY2DB[k] || k;
 const DATE_KEYS = new Set(['agr', 'roDate']);
@@ -244,7 +244,8 @@ async function downloadFullMaster() {
     XLSX.utils.book_append_sheet(wb, ws, 'Master');
     const gaoa = [gh, ...geda.map(g => gh.map(h => (g.data || {})[h] ?? ''))];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(gaoa), 'GEDA FORMAT');
-    XLSX.utils.book_append_sheet(wb, pendencySheet(S.mRows.filter(r => bidirState(r.v) === 'pending')), 'Pendency');
+    XLSX.utils.book_append_sheet(wb, pendencySheet(S.mRows.filter(r => bidirState(r.v) === 'pending' && !isHT(r.v))), 'Pendency');
+    XLSX.utils.book_append_sheet(wb, pendencySheet(S.mRows.filter(r => bidirState(r.v) === 'pending' && isHT(r.v)), 'ht'), 'HT Pendency');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['SDN Code', 'Name of SDn'], ...[...S.sdn.entries()].map(([c, n]) => [isNum(c) ? +c : c, n])]), 'SDN Code');
     busy(true, 'Writing Excel…'); await tick();
     XLSX.writeFile(wb, `Master File for GEDA Applications ${fmtD(todaySerial())}.xlsx`, { compression: true });

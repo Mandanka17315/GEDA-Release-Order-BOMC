@@ -7,7 +7,7 @@ function setStatus(msg, cls = 'ok') {
 }
 function statusLine() {
   if (S.mode === 'admin') setStatus(`Admin · ${S.email} · ${S.mRows.length} records`);
-  else setStatus(`Field office · ${S.mRows.length} pending`);
+  else setStatus(`Field office · ${S.mRows.length} pending (LT + HT)`);
 }
 function refreshAll() {
   if (S.mode === 'admin') { buildDatalists(); renderDash(); }
@@ -75,13 +75,18 @@ async function reload() {
 }
 
 /* ---------- tabs ---------- */
+const PAGE_SEC = { ht: 'ro', htp: 'pend' };   // HT Connection reuses the RO form; HT Solar Pendency reuses the pending list
 function showPage(p) {
-  if (!isAdmin() && !['pend', 'chg'].includes(p)) p = 'pend';
+  if (!isAdmin() && !['pend', 'htp', 'chg'].includes(p)) p = 'pend';
   $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.p === p));
-  $$('section.page').forEach(s => s.classList.toggle('on', s.id === 'p-' + p));
+  const sec = PAGE_SEC[p] || p;
+  $$('section.page').forEach(s => s.classList.toggle('on', s.id === 'p-' + sec));
   if (p === 'chg') renderChargesPage();
+  if (sec === 'ro') setRoMode(p === 'ht' ? 'ht' : 'lt');
+  if (sec === 'pend') setPendKind(p === 'htp' ? 'ht' : 'lt');
   window.scrollTo(0, 0);
 }
+function markTab(p) { $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.p === p)); }
 
 /* ---------- status helpers ---------- */
 function bidirState(v) {
@@ -95,6 +100,7 @@ function bidirState(v) {
   return 'other';
 }
 const roSerial = v => parseDateLoose(v.roDate);
+const isHT = v => /^ht$/i.test(clean(v && v.connType));
 function sdnName(v) { const c = String(v.cons ?? '').replace(/\D/g, ''); if (!c) return clean(v.sdn); const code = String(+(c.length === 10 ? c.slice(0, 2) : c.slice(0, 3))); return S.sdn.get(code) || clean(v.sdn); }
 function portalMeter(rec) {
   if (rec.portal) return rec.portal;
@@ -108,8 +114,10 @@ function renderDash() {
   const today = todaySerial(), [ty, tm] = ymdOf(today);
   let ro = 0, rel = 0, pend = 0, p30 = 0, canc = 0, roM = 0, relM = 0, dsum = 0, dn = 0;
   const div = new Map();
+  let ht = 0, htRel = 0, htPend = 0;
   for (const r of S.mRows) {
     const v = r.v, st = bidirState(v), rs = roSerial(v), dv = clean(v.div) || '(blank)';
+    if (isHT(v)) { ht++; if (st === 'released') htRel++; if (st === 'pending') htPend++; continue; }
     if (!div.has(dv)) div.set(dv, { ro: 0, rel: 0, pend: 0, p30: 0, ds: 0, dn: 0 });
     const D = div.get(dv);
     if (rs) { ro++; D.ro++; const [y, m] = ymdOf(rs); if (y === ty && m === tm) roM++; }
@@ -125,7 +133,8 @@ function renderDash() {
     tile('RO issued', ro.toLocaleString('en-IN')), tile('Meter released', rel.toLocaleString('en-IN'), 'ok'),
     tile('Pending release', pend, 'warn', "App.go('pend')"), tile('Pending > 30 days', p30, p30 ? 'bad' : '', "App.go('pend',30)"),
     tile('ROs this month', roM), tile('Releases this month', relM), tile('Avg. days RO → meter', dn ? (dsum / dn).toFixed(1) : '–'),
-    tile('Cancelled', canc)
+    tile('Cancelled', canc),
+    tile('HT connections', ht), tile('HT released', htRel, 'ok'), tile('HT pending release', htPend, htPend ? 'warn' : '', "App.go('htp')")
   ].join('');
   const rows = [...div.entries()].filter(([k]) => k !== '(blank)').sort((a, b) => a[0].localeCompare(b[0]));
   $('#divTable').innerHTML = `<thead><tr><th>Division</th><th class="num">RO issued</th><th class="num">Released</th><th class="num">Pending</th><th class="num">&gt;30 days</th><th class="num">Avg days</th></tr></thead><tbody>` +
@@ -134,11 +143,15 @@ function renderDash() {
   $('#actTable').innerHTML = `<thead><tr><th>When</th><th>Application</th><th>What</th><th>By</th></tr></thead><tbody>` +
     (act.length ? act.map(a => {
       const d = a.detail || {};
-      const what = a.action === 'released' ? `Meter installed ${d.meter_date ? fmtD(parseDateLoose(d.meter_date)) : ''}` : a.action === 'reason' ? `Reason: ${esc(d.reason || '')}` : esc(a.action || '');
+      const what = a.action === 'ht_created' ? 'HT connection added' : a.action === 'released' ? `Released / meter installed ${d.meter_date ? fmtD(parseDateLoose(d.meter_date)) : ''}` : a.action === 'reason' ? `Reason: ${esc(d.reason || '')}` : esc(a.action || '');
       return `<tr><td class="small">${whenTxt(a.at)}</td><td><a href="#" data-open="${esc(appKey(a.app_no))}">${esc(a.app_no)}</a></td><td>${what}</td><td>${esc(a.by_name)}</td></tr>`;
     }).join('') : '<tr><td colspan="4" class="muted">No updates yet.</td></tr>') + '</tbody>';
 }
-function updateBadge() { $('#pendBadge').textContent = S.mRows.filter(r => bidirState(r.v) === 'pending').length; }
+function updateBadge() {
+  const p = S.mRows.filter(r => bidirState(r.v) === 'pending');
+  $('#pendBadge').textContent = p.filter(r => !isHT(r.v)).length;
+  $('#htBadge').textContent = p.filter(r => isHT(r.v)).length;
+}
 
 /* ---------- lookup ---------- */
 function findApp(q) {
@@ -159,7 +172,7 @@ function searchApps(q, lim = 12) {
   q = clean(q).toUpperCase(); if (q.length < 3) return [];
   const out = [], seen = new Set();
   const push = (key, label) => { if (seen.has(key) || out.length >= lim) return; seen.add(key); out.push({ key, label }); };
-  for (const r of S.mRows) { const s = (r.key + ' ' + r.v.cons + ' ' + r.v.name).toUpperCase(); if (s.includes(q)) push(r.key, `${esc(r.key)} · ${esc(clean(r.v.name))} · ${esc(r.v.cons)} <span class="pill info">RO entered</span>`); }
+  for (const r of S.mRows) { const s = (r.key + ' ' + r.v.cons + ' ' + r.v.name).toUpperCase(); if (s.includes(q)) push(r.key, `${esc(r.key)} · ${esc(clean(r.v.name))} · ${esc(r.v.cons)} ${isHT(r.v) ? '<span class="pill warn">HT entered</span>' : '<span class="pill info">RO entered</span>'}`); }
   for (const g of S.gList) { const k = appKey(g.__app); const s = (k + ' ' + gv(g, 'Consumer No.') + ' ' + gName(g)).toUpperCase(); if (s.includes(q)) push(k, `${esc(k)} · ${esc(gName(g))} · ${esc(gv(g, 'Consumer No.'))} <span class="pill">${esc(gv(g, 'Application Status'))}</span>`); }
   return out;
 }
@@ -178,7 +191,24 @@ const CHG = [
   { k: 'conn', r: 'connR', label: 'Connectivity charges', calc: c => c.conn, fx: () => '' },
   { k: 'ss', r: 'ssR', label: 'System strengthening charges', calc: c => c.ss, fx: () => '' }
 ];
-let CUR = null;
+let CUR = null, RO_MODE = 'lt';
+function setRoMode(m) {
+  if (m !== RO_MODE && CUR) { CUR = null; $('#roForm').style.display = 'none'; $('#roSearch').value = ''; $('#roMsg').innerHTML = ''; }
+  RO_MODE = m; applyRoMode();
+}
+function applyRoMode() {
+  const ht = RO_MODE === 'ht';
+  $('#htModeNote').style.display = ht ? '' : 'none';
+  $('#roNoWrap').style.display = ht ? 'none' : '';
+  $('#roDateLbl').textContent = ht ? 'Entry date (pendency days count from this)' : 'Release Order date';
+  $('#hAgr').textContent = ht ? 'Agreement & CEI' : 'Agreement, CEI & RO';
+  $('#hRel').textContent = ht ? 'Connection release' : 'Meter release';
+  $('#bidirLbl').textContent = ht ? 'Release status' : 'Bi-directional meter';
+  $('#btnWordOnly').style.display = ht ? 'none' : '';
+  $('#btnSaveWord').style.display = ht ? 'none' : '';
+  $('#btnSaveOnly').classList.toggle('ok', ht); $('#btnSaveOnly').classList.toggle('sec', !ht);
+}
+const entered = () => RO_MODE === 'ht' ? 'HT entered' : 'RO entered';
 
 function splitReceipt(s) {
   s = clean(showVal(s)); if (!s || s === '0' || /^-+$/.test(s)) return ['', ''];
@@ -188,7 +218,7 @@ function splitReceipt(s) {
 }
 function joinReceipt(no, iso) { no = clean(no); if (!no) return ''; if (!iso) return no; const [y, m, d] = iso.split('-'); return `${no} Dt. ${d}.${m}.${y}`; }
 
-function openRO(key) { showPage('ro'); $('#roSearch').value = key; fetchApp(); }
+function openRO(key) { const r = S.mByKey.get(key); showPage(r && isHT(r.v) ? 'ht' : 'ro'); $('#roSearch').value = key; fetchApp(); }
 async function fetchApp() {
   $('#roSugg').style.display = 'none';
   const q = $('#roSearch').value, key = findApp(q);
@@ -201,6 +231,11 @@ async function fetchApp() {
   if (g && !g.__full) { busy(true, 'Loading portal details…'); try { g = await DB.getGeda(key); } catch (e) { toast('Portal details not loaded: ' + esc(e.message), 'bad'); } finally { busy(false); } }
   CUR = { key, rec: S.mByKey.get(key) || null, g, over: {} };
   $('#roMsg').innerHTML = '';
+  if (CUR.rec) {   // an existing entry opens in its own mode (LT RO or HT connection)
+    const want = isHT(CUR.rec.v) ? 'ht' : 'lt';
+    if (want !== RO_MODE) { RO_MODE = want; applyRoMode(); markTab(want === 'ht' ? 'ht' : 'ro');
+      $('#roMsg').innerHTML = `<div class="note info">This application is saved as ${want === 'ht' ? 'an <b>HT connection</b>' : 'an <b>LT Release Order</b>'}, so it opened here.</div>`; }
+  }
   fillForm();
   $('#roForm').style.display = '';
 }
@@ -215,7 +250,7 @@ function fillForm() {
   const pick = k => { const sv = v[k]; if (rec && sv !== '' && sv != null) return sv; const gvv = gedaVal(g, k); return gvv !== '' ? gvv : (sv ?? ''); };
   const app = rec ? clean(v.app) : (g ? g.__app : key);
   $('#roTitle').textContent = app;
-  $('#roState').innerHTML = rec ? `<span class="pill info">RO entered</span> ` + statePill(rec.v) + (rec.updatedBy ? ` <span class="who">Last updated by ${esc(rec.updatedBy)} · ${whenTxt(rec.updatedAt)}</span>` : '') : `<span class="pill warn">New – no RO yet</span>`;
+  $('#roState').innerHTML = rec ? `<span class="pill info">${entered()}</span> ` + statePill(rec.v) + (rec.updatedBy ? ` <span class="who">Last updated by ${esc(rec.updatedBy)} · ${whenTxt(rec.updatedAt)}</span>` : '') : `<span class="pill warn">${RO_MODE === 'ht' ? 'New HT connection' : 'New – no RO yet'}</span>`;
   for (const [k, id] of Object.entries(F)) $('#' + id).value = showVal(pick(k));
   if (!rec) {
     $('#f_msme').value = 'Yes';
@@ -257,9 +292,10 @@ function fillForm() {
   } else kv.push('<div class="muted">Not found in portal data – fill the consumer details by hand, or update portal data in Settings.</div>');
   $('#portalKv').innerHTML = kv.join('');
   updateCalc(); panelCheck();
-  $('#roSaveInfo').textContent = rec ? 'Saving updates this RO on the server.' : 'Saving adds this RO to the server.';
+  $('#roSaveInfo').textContent = saveInfo(!!rec);
 }
-function statePill(v) { const st = bidirState(v); return st === 'released' ? `<span class="pill ok">Meter released ${esc(fmtD(parseDateLoose(v.bidir)))}</span>` : st === 'pending' ? '<span class="pill warn">Release pending</span>' : st === 'cancelled' ? `<span class="pill bad">${esc(clean(v.bidir))}</span>` : ''; }
+const saveInfo = has => RO_MODE === 'ht' ? (has ? 'Saving updates this HT connection on the server.' : 'Saving adds this HT connection to HT Solar Pendency.') : (has ? 'Saving updates this RO on the server.' : 'Saving adds this RO to the server.');
+function statePill(v) { const st = bidirState(v); return st === 'released' ? `<span class="pill ok">${isHT(v) ? 'Released' : 'Meter released'} ${esc(fmtD(parseDateLoose(v.bidir)))}</span>` : st === 'pending' ? '<span class="pill warn">Release pending</span>' : st === 'cancelled' ? `<span class="pill bad">${esc(clean(v.bidir))}</span>` : ''; }
 function bidirUI() { const s = $('#f_bidirSel').value; $('#bidirDateWrap').style.display = s === 'date' ? '' : 'none'; $('#bidirTextWrap').style.display = s === 'other' ? '' : 'none'; }
 function curCalc() { return calcCharges({ type: $('#f_rotype').value, cl: $('#f_cl').value, pv: $('#f_pv').value, ex: $('#f_ex').value, gen: $('#f_gen').checked }); }
 function updateCalc() {
@@ -302,6 +338,7 @@ function readForm() {
   }
   v.roType = $('#f_rotype').value; v.genMeter = v.roType === 'add' && $('#f_gen').checked ? c.gen : '';
   v.agrYes = 'YES';
+  v.connType = RO_MODE === 'ht' ? 'HT' : '';
   const bs = $('#f_bidirSel').value;
   v.bidir = bs === 'date' ? ($('#f_bidirDate').value ? { d: parseDateLoose($('#f_bidirDate').value) } : 'Pending') : bs === 'other' ? $('#f_bidirText').value.trim() : 'Pending';
   return v;
@@ -310,7 +347,7 @@ function validate(v) {
   const miss = [];
   if (!v.name) miss.push('Name of consumer'); if (!v.cons) miss.push('Consumer No.'); if (!isNum(v.pv)) miss.push('PV capacity');
   if (!v.cei) miss.push('CEI approval'); if (!v.agr) miss.push('Agreement date'); if (!v.pmake) miss.push('Panel make');
-  if (!v.imake) miss.push('Inverter make'); if (!v.isr) miss.push('Inverter Sr. No.'); if (!v.roDate) miss.push('RO date');
+  if (!v.imake) miss.push('Inverter make'); if (!v.isr) miss.push('Inverter Sr. No.'); if (!v.roDate) miss.push(RO_MODE === 'ht' ? 'Entry date' : 'RO date');
   for (const c of CHG) if (v[c.k] > 0 && !$('#r_' + c.k).value.trim()) miss.push(c.label + ' receipt');
   return miss;
 }
@@ -327,6 +364,7 @@ async function saveRO(withWord) {
     if (CUR.rec) {
       const vals = {};
       for (const k of SAVE_KEYS) if (!sameVal(v[k], CUR.rec.v[k])) vals[k] = v[k];
+      if (!sameVal(v.connType, CUR.rec.v.connType)) vals.connType = v.connType;
       changed = Object.keys(vals).length;
       if (changed) {
         rec = await DB.updateMaster(CUR.rec.v.app, vals);
@@ -337,23 +375,24 @@ async function saveRO(withWord) {
       const maxSr = S.mRows.reduce((m, r) => Math.max(m, numOr(r.v.sr)), 0);
       const nv = { sr: maxSr + 1, app: v.app, status: gedaVal(CUR.g, 'status') };
       for (const k of SAVE_KEYS) nv[k] = v[k];
+      if (v.connType) nv.connType = v.connType;
       rec = await DB.insertMaster(nv); changed = 1;
-      await DB.log(rec.v.app, 'ro_created', { ro_date: toCell('roDate', v.roDate) });
+      await DB.log(rec.v.app, v.connType ? 'ht_created' : 'ro_created', { ro_date: toCell('roDate', v.roDate) });
     }
     const i = S.mRows.findIndex(r => r.key === rec.key);
     if (i >= 0) S.mRows[i] = rec; else S.mRows.push(rec);
     S.mByKey.set(rec.key, rec); CUR.rec = rec;
     busy(false);
     toast(changed ? `Saved ${esc(rec.v.app)}.` : 'No changes to save.', 'ok');
-    if (withWord) await makeRO(Object.assign({}, rec.v, v, { __key: CUR.key }), $('#f_rotype').value);
-    $('#roState').innerHTML = `<span class="pill info">RO entered</span> ` + statePill(rec.v) + ` <span class="who">Last updated by ${esc(rec.updatedBy)} · ${whenTxt(rec.updatedAt)}</span>`;
-    $('#roSaveInfo').textContent = 'Saving updates this RO on the server.';
+    if (withWord && RO_MODE !== 'ht') await makeRO(Object.assign({}, rec.v, v, { __key: CUR.key }), $('#f_rotype').value);
+    $('#roState').innerHTML = `<span class="pill info">${entered()}</span> ` + statePill(rec.v) + ` <span class="who">Last updated by ${esc(rec.updatedBy)} · ${whenTxt(rec.updatedAt)}</span>`;
+    $('#roSaveInfo').textContent = saveInfo(true);
     DB.loadActivity().then(() => isAdmin() && renderDash()).catch(() => { });
     refreshAll();
   } catch (e) { console.error(e); toast('Save failed: ' + esc(e.message), 'bad', 9000); }
   finally { busy(false); }
 }
-async function wordOnly() { if (!CUR) return; try { await makeRO(readForm(), $('#f_rotype').value); } catch (e) { console.error(e); toast('Could not make the Word file: ' + esc(e.message), 'bad'); } }
+async function wordOnly() { if (!CUR || RO_MODE === 'ht') return; try { await makeRO(readForm(), $('#f_rotype').value); } catch (e) { console.error(e); toast('Could not make the Word file: ' + esc(e.message), 'bad'); } }
 function showSugg(list) {
   const el = $('#roSugg');
   if (!list.length) { el.style.display = 'none'; return; }
@@ -366,9 +405,19 @@ function buildDatalists() {
 }
 
 /* ---------- Pending release ---------- */
-const PEND = { edits: new Map() };   // key -> {date:'yyyy-mm-dd', reason}
+const PEND = { edits: new Map(), kind: 'lt' };   // key -> {date:'yyyy-mm-dd', reason}; kind 'lt' = Pending Release, 'ht' = HT Solar Pendency
+const inKind = v => PEND.kind === 'ht' ? isHT(v) : !isHT(v);
+function setPendKind(k) {
+  if (k === PEND.kind) return;
+  PEND.kind = k; buildPendFilters(); renderPend();
+}
+function pendLabels() {
+  const ht = PEND.kind === 'ht';
+  $('#pendHead').textContent = ht ? 'HT Solar Pendency' : 'Pending Release';
+  $('#btnPendXls').textContent = ht ? 'Download HT Pendency Excel' : 'Download Pendency Excel';
+}
 function buildPendFilters() {
-  const pend = S.mRows.filter(r => bidirState(r.v) === 'pending');
+  const pend = S.mRows.filter(r => bidirState(r.v) === 'pending' && inKind(r.v));
   const divs = [...new Set(pend.map(r => clean(r.v.div)).filter(Boolean))].sort();
   const keep = $('#pDiv').value || localStorage.getItem('geda.pDiv') || '';
   $('#pDiv').innerHTML = '<option value="">All divisions</option>' + divs.map(d => `<option>${esc(d)}</option>`).join('');
@@ -377,14 +426,14 @@ function buildPendFilters() {
 }
 function buildSdnFilter() {
   const dv = $('#pDiv').value, keep = $('#pSdn').value || localStorage.getItem('geda.pSdn') || '';
-  const sd = [...new Set(S.mRows.filter(r => bidirState(r.v) === 'pending' && (!dv || clean(r.v.div) === dv)).map(r => sdnName(r.v)).filter(Boolean))].sort();
+  const sd = [...new Set(S.mRows.filter(r => bidirState(r.v) === 'pending' && inKind(r.v) && (!dv || clean(r.v.div) === dv)).map(r => sdnName(r.v)).filter(Boolean))].sort();
   $('#pSdn').innerHTML = '<option value="">All sub-divisions</option>' + sd.map(d => `<option>${esc(d)}</option>`).join('');
   if (sd.includes(keep)) $('#pSdn').value = keep;
 }
 function pendRows() {
   const dv = $('#pDiv').value, sd = $('#pSdn').value, q = clean($('#pQ').value).toUpperCase(), age = $('#pAge').value, today = todaySerial();
   return S.mRows.filter(r => {
-    if (bidirState(r.v) !== 'pending') return false;
+    if (bidirState(r.v) !== 'pending' || !inKind(r.v)) return false;
     if (dv && clean(r.v.div) !== dv) return false;
     if (sd && sdnName(r.v) !== sd) return false;
     if (age === '30') { const rs = roSerial(r.v); if (!rs || today - rs <= 30) return false; }
@@ -393,9 +442,11 @@ function pendRows() {
   }).sort((a, b) => (roSerial(a.v) || 0) - (roSerial(b.v) || 0));
 }
 function renderPend() {
-  const rows = pendRows(), today = todaySerial();
-  $('#pCount').textContent = `${rows.length} pending connection${rows.length === 1 ? '' : 's'}`;
-  $('#pendTable').innerHTML = `<thead><tr><th style="width:44px" class="num">#</th><th>Consumer</th><th>Sub-division</th><th class="num">PV kW</th><th>RO date</th><th class="num">Days</th><th style="width:150px">Meter installed on</th><th style="min-width:240px">Reason for pending</th></tr></thead><tbody>` +
+  const rows = pendRows(), today = todaySerial(), ht = PEND.kind === 'ht';
+  const dLbl = ht ? 'Entry date' : 'RO date', mLbl = ht ? 'Released on' : 'Meter installed on';
+  pendLabels();
+  $('#pCount').textContent = `${rows.length} pending ${ht ? 'HT ' : ''}connection${rows.length === 1 ? '' : 's'}`;
+  $('#pendTable').innerHTML = `<thead><tr><th style="width:44px" class="num">#</th><th>Consumer</th><th>Sub-division</th><th class="num">PV kW</th><th>${dLbl}</th><th class="num">Days</th><th style="width:150px">${mLbl}</th><th style="min-width:240px">Reason for pending</th></tr></thead><tbody>` +
     (rows.length ? rows.map((r, i) => {
       const v = r.v, rs = roSerial(v), days = rs ? today - rs : '', e = PEND.edits.get(r.key) || {};
       const nm = esc(clean(v.name));
@@ -405,10 +456,10 @@ function renderPend() {
         <td class="c-cons">${nameCell}<div class="small muted">Cons. No. ${esc(v.cons)} · ${esc(clean(v.village))}</div></td>
         <td data-l="Sub-division">${esc(sdnName(v))}<div class="small muted">${esc(clean(v.div))}</div></td>
         <td class="num" data-l="PV kW">${esc(v.pv)}${numOr(v.ex) ? `<span class="small muted"> +${esc(v.ex)}</span>` : ''}</td>
-        <td data-l="RO date">${rs ? fmtD(rs) : ''}</td><td class="num" data-l="Days">${dayTxt}</td>
-        <td data-l="Meter installed on" class="c-in"><input type="date" data-f="date" max="${isoD(today)}" value="${esc(e.date ?? '')}"></td>
+        <td data-l="${dLbl}">${rs ? fmtD(rs) : ''}</td><td class="num" data-l="Days">${dayTxt}</td>
+        <td data-l="${mLbl}" class="c-in"><input type="date" data-f="date" max="${isoD(today)}" value="${esc(e.date ?? '')}"></td>
         <td data-l="Reason for pending" class="c-in"><input data-f="reason" value="${esc(e.reason ?? clean(v.remark))}" placeholder="Reason if not released">${r.updatedBy && clean(v.remark) ? `<div class="who">${esc(r.updatedBy)} · ${whenTxt(r.updatedAt)}</div>` : ''}</td></tr>`;
-    }).join('') : '<tr><td colspan="8" class="empty">No pending connections for this filter.</td></tr>') + '</tbody>';
+    }).join('') : `<tr><td colspan="8" class="empty">No pending ${ht ? 'HT ' : ''}connections for this filter.</td></tr>`) + '</tbody>';
   updatePendBar();
 }
 function pendEdit(key, f, val) {
@@ -433,8 +484,9 @@ async function savePend() {
   for (const [key, e] of PEND.edits) {
     const rec = S.mByKey.get(key); if (!rec) continue;
     const s = e.date ? parseDateLoose(e.date) : null, rs = roSerial(rec.v);
-    if (s && s > todaySerial()) { toast(`${esc(rec.v.app)}: meter date is in the future.`, 'bad'); return; }
-    if (s && rs && s < rs && !confirm(`${rec.v.app}: meter date ${fmtD(s)} is before the RO date ${fmtD(rs)}. Save anyway?`)) continue;
+    const dw = isHT(rec.v) ? 'release date' : 'meter date', rw = isHT(rec.v) ? 'entry date' : 'RO date';
+    if (s && s > todaySerial()) { toast(`${esc(rec.v.app)}: ${dw} is in the future.`, 'bad'); return; }
+    if (s && rs && s < rs && !confirm(`${rec.v.app}: ${dw} ${fmtD(s)} is before the ${rw} ${fmtD(rs)}. Save anyway?`)) continue;
     const reason = e.reason !== undefined && clean(e.reason) !== clean(rec.v.remark) ? clean(e.reason) : null;
     todo.push({ rec, iso: s ? isoD(s) : null, reason });
   }
@@ -454,9 +506,9 @@ function usePortalDates() {
   for (const r of pendRows()) { const pm = portalMeter(r); if (pm && pm.d) { const e = PEND.edits.get(r.key) || {}; if (!e.date) { e.date = isoD(pm.d); PEND.edits.set(r.key, e); n++; } } }
   renderPend(); toast(n ? `Filled ${n} meter date${n === 1 ? '' : 's'} from the portal. Check them, then click Save.` : 'No pending rows in this filter have a meter date on the portal.', n ? 'ok' : '');
 }
-function pendencySheet(rows) {
-  const today = todaySerial();
-  const H = ['Name of Division', 'GEDA APPLICATION NO', 'Name of Sub Division', 'Consumer No.', 'Name of Consumer', 'PV Capacity', 'Existing PV Capacity (kW)', 'Sanctioned / Contract Load', 'City/Village', 'Release Order Date', 'Bi-Directional meter installed', 'EURJA SR NO.', 'TARIFF', 'Reason for Pending', 'Days since RO'];
+function pendencySheet(rows, kind) {
+  const today = todaySerial(), ht = kind === 'ht';
+  const H = ['Name of Division', 'GEDA APPLICATION NO', 'Name of Sub Division', 'Consumer No.', 'Name of Consumer', 'PV Capacity', 'Existing PV Capacity (kW)', 'Sanctioned / Contract Load', 'City/Village', ht ? 'Entry Date' : 'Release Order Date', ht ? 'Connection Released' : 'Bi-Directional meter installed', 'EURJA SR NO.', 'TARIFF', 'Reason for Pending', ht ? 'Days Pending' : 'Days since RO'];
   const n = x => xnum(x);
   const aoa = [H, ...rows.map(r => { const v = r.v, rs = roSerial(v); return [clean(v.div), clean(v.app), sdnName(v), n(v.cons), clean(v.name), n(v.pv), n(v.ex), n(v.cl), clean(v.village), rs ? fmtD(rs) : '', 'Pending', showVal(v.eurja), clean(v.tariff), clean(v.remark), rs ? today - rs : '']; })];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -465,9 +517,10 @@ function pendencySheet(rows) {
   return ws;
 }
 function pendencyExcel() {
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, pendencySheet(pendRows()), 'Pendency');
+  const ht = PEND.kind === 'ht';
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, pendencySheet(pendRows(), PEND.kind), ht ? 'HT Pendency' : 'Pendency');
   const tag = $('#pSdn').value || $('#pDiv').value || 'All';
-  XLSX.writeFile(wb, safeName(`Solar Pendency ${tag} ${fmtD(todaySerial())}.xlsx`));
+  XLSX.writeFile(wb, safeName(`${ht ? 'HT Solar Pendency' : 'Solar Pendency'} ${tag} ${fmtD(todaySerial())}.xlsx`));
 }
 
 /* ---------- GEDA Charges page ---------- */
@@ -611,6 +664,6 @@ function init() {
 }
 window.App = {
   printCharges, S, DB, calcCharges, openRO,
-  go(p, age, div) { showPage(p); if (p === 'pend') { if (div !== undefined) { $('#pDiv').value = div; buildSdnFilter(); } $('#pAge').value = age === 30 ? '30' : '0'; renderPend(); } }
+  go(p, age, div) { showPage(p); if (p === 'pend' || p === 'htp') { if (div !== undefined) { $('#pDiv').value = div; buildSdnFilter(); } $('#pAge').value = age === 30 ? '30' : '0'; renderPend(); } }
 };
 document.addEventListener('DOMContentLoaded', init);
