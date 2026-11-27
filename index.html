@@ -211,8 +211,8 @@
     <div class="grid g2">
       <div class="card">
         <h3>Data on server</h3>
-        <div class="small muted" style="margin-bottom:10px">Download everything as one Excel file: Master (all columns, values), GEDA FORMAT, Pendency and SDN Code sheets.</div>
-        <button class="btn" id="btnFullMaster">Download full Master file</button>
+        <div class="small muted" style="margin-bottom:10px">Download the full Master as one Excel file with two sheets: <b>LT Connections</b> and <b>HT Connections</b> (all columns, values).</div>
+        <div class="row"><button class="btn" id="btnFullMaster">Download full Master file</button><button class="btn sec" id="btnHTMaster">Download HT Solar Master file</button></div>
         <div id="srvInfo" class="small muted" style="margin-top:10px"></div>
       </div>
       <div class="card">
@@ -222,7 +222,7 @@
       </div>
       <div class="card">
         <h3>Import Master File from Excel</h3>
-        <div class="small muted" style="margin-bottom:10px">One-time move of your existing <i>Master File for GEDA Applications.xlsx</i> to the server: Master, GEDA FORMAT and SDN Code sheets. Rows already on the server with the same Application No. are overwritten by the Excel values.</div>
+        <div class="small muted" style="margin-bottom:10px">One-time move of your existing <i>Master File for GEDA Applications.xlsx</i> to the server: Master, GEDA FORMAT and SDN Code sheets. A full Master download (LT Connections + HT Connections sheets) can also be imported back. Rows already on the server with the same Application No. are overwritten by the Excel values.</div>
         <div class="row"><label class="btn sec">Choose Master File<input type="file" id="masterFile" accept=".xlsx" hidden></label><span id="masterInfo" class="small muted"></span></div>
       </div>
       <div class="card">
