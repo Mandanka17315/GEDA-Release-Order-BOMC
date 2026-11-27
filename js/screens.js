@@ -216,8 +216,16 @@ function applyRoMode() {
    Stored in the same Master columns: make "A, B", capacity "50 + 30", Sr. No. "S1, S2". */
 // HT entries may also carry a number of identical inverters: "50 x 2 + 30" = two 50 kW + one 30 kW
 const HT_ISR = 'As per CEI Approval';
-const capParts = s => String(s ?? '').split('+').map(x => x.trim()).filter(x => x !== '');
-const capOne = p => { const m = String(p).match(/^(.*?)\s*[x×*]\s*(\d+)\s*$/i); return m ? { c: m[1].trim(), n: +m[2] } : { c: String(p).trim(), n: 1 }; };
+// parts may be separated by + or , ; each part is "capacity", "capacity x nos" or "nos x capacity"
+const capParts = s => String(s ?? '').split(/[+,]/).map(x => x.trim()).filter(x => x !== '');
+const capOne = p => {
+  const m = String(p).match(/^([\d.]+)\s*[x×*]\s*([\d.]+)$/i);
+  if (!m) return { c: String(p).trim(), n: 1 };
+  const a = +m[1], b = +m[2];
+  if (Number.isInteger(b) && b <= 12) return { c: m[1], n: b };          // 100 X 3
+  if (Number.isInteger(a) && a <= 12 && b > 12) return { c: m[2], n: a }; // 3 X 100
+  return { c: m[1], n: Number.isInteger(b) ? b : 1 };
+};
 const sumCap = s => +capParts(s).reduce((a, x) => { const o = capOne(x); return a + numOr(o.c) * o.n; }, 0).toFixed(3);
 const invCount = s => capParts(s).reduce((a, x) => a + capOne(x).n, 0);
 function invSplit(make, cap, sr) {
