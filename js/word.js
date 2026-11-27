@@ -43,7 +43,7 @@ function roData(v, type) {
     cl: isNum(v.cl) ? +v.cl : clean(v.cl), msme: clean(v.msme) || '-', sdn: clean(v.sdn), div: clean(v.div), circle: SET.circle,
     pv: fix2(pv), ex: fix2(ex), add: fix2(pv), total: fix2(pv + ex),
     cei: clean(showVal(v.cei)), agr: fmtD(parseDateLoose(v.agr)), roNo: clean(v.roNo), roDate: fmtD(parseDateLoose(v.roDate)),
-    pmake: clean(v.pmake), pwatt: clean(v.pwatt), pnos: clean(v.pnos), ptot: clean(v.ptot), imake: clean(v.imake), icap: capParts(showVal(v.icap)).length > 1 ? `${capParts(showVal(v.icap)).join(' + ')} = ${sumCap(showVal(v.icap))}` : fix2(v.icap), icapTot: sumCap(showVal(v.icap)), icapRaw: showVal(v.icap), invN: capParts(showVal(v.icap)).length || 1,
+    pmake: clean(v.pmake), pwatt: clean(v.pwatt), pnos: clean(v.pnos), ptot: clean(v.ptot), imake: clean(v.imake), icap: capParts(showVal(v.icap)).length > 1 ? `${capParts(showVal(v.icap)).join(' + ')} = ${sumCap(showVal(v.icap))}` : fix2(v.icap), icapTot: sumCap(showVal(v.icap)), icapRaw: showVal(v.icap), invN: invCount(showVal(v.icap)) || 1,
     volt: clean(v.volt), isr: clean(v.isr),
     meter: isNum(v.meter) ? +v.meter : clean(v.meter) || 0, meterR: rc(v.meterR), test: isNum(v.test) ? +v.test : clean(v.test) || 0, testR: rc(v.testR),
     conn: isNum(v.conn) ? +v.conn : clean(v.conn) || 0, connR: rc(v.connR), ss: isNum(v.ss) ? +v.ss : clean(v.ss) || 0, ssR: rc(v.ssR),
@@ -122,7 +122,7 @@ function letterBody(D) {
   R(10, 'Details of Solar Panel', [`Make of solar panel: **${D.pmake}**`, `Capacity of solar PV cell Modules: **${D.pwatt} Wp**`, `No. of Modules: **${D.pnos}**`, `Total Watt: **${D.ptot} Watt**`]);
   const INV = invSplit(D.imake, D.icapRaw, D.isr);
   R(11, 'Details of Inverter', INV.length > 1
-    ? [...INV.map((r, i) => `Inverter ${i + 1}: Make **${r.m}**, Capacity **${fix2(r.c)} KW**, Sr. No. **${r.s}**`), `Total capacity: **${D.icapTot} KW** (${INV.length} inverters)`, `Voltage: **${D.volt} V**`]
+    ? [...INV.map((r, i) => `Inverter ${i + 1}: Make **${r.m}**, Capacity **${fix2(r.c)} KW**${r.n > 1 ? ` × **${r.n} Nos.**` : ''}, Sr. No. **${r.s}**`), `Total capacity: **${D.icapTot} KW** (${invCount(D.icapRaw)} inverters)`, `Voltage: **${D.volt} V**`]
     : [`Make: **${D.imake}**`, `Capacity: **${D.icap} KW**`, `Voltage: **${D.volt} V**`, `Sr. No.: **${D.isr}**`]);
   if (D.installer) R(12, 'Name of Installer', `**${D.installer}**`);
   x.push(TABLE(w, rows));
