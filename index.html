@@ -115,11 +115,14 @@
           <label class="f">Module capacity (Wp)<input id="f_pwatt" type="number" class="req"></label>
           <label class="f">No. of modules<input id="f_pnos" type="number" class="req"></label>
           <label class="f">Total watt<input id="f_ptot" readonly></label>
-          <label class="f">Inverter make<input id="f_imake" class="req" list="dlInv"></label>
-          <label class="f">Inverter capacity (kW)<input id="f_icap" type="number" step="any" class="req"></label>
           <label class="f">Voltage (V)<select id="f_volt"><option>230</option><option>415</option><option>400</option></select></label>
-          <label class="f">Inverter Sr. No.<input id="f_isr" class="req"></label>
         </div>
+        <input type="hidden" id="f_imake"><input type="hidden" id="f_icap"><input type="hidden" id="f_isr">
+        <table class="t inv" style="margin-top:12px">
+          <thead><tr><th style="width:40px" class="num">#</th><th>Inverter make</th><th style="width:150px">Capacity (kW)</th><th>Inverter Sr. No.</th><th style="width:40px"></th></tr></thead>
+          <tbody id="invRows"></tbody>
+        </table>
+        <div class="row" style="margin-top:8px"><button type="button" class="btn sec sm" id="btnInvAdd">+ Add inverter</button><span class="spacer"></span><span class="small" id="invTot"></span></div>
         <div id="panelWarn"></div>
         <datalist id="dlPanel"></datalist><datalist id="dlInv"></datalist>
       </div>
