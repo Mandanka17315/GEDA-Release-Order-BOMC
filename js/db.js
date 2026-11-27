@@ -212,44 +212,87 @@ function masterRowsFromAoa(rows) {
 }
 
 /* ---------- full Master file download ---------- */
-const xnum = v => { if (typeof v !== 'string' || !/^-?\d[\d,]*(\.\d+)?$/.test(v.trim()) || v.trim().length > 15 || /^0\d/.test(v.trim())) return v ?? ''; const n = Number(v.replace(/,/g, '')); return isFinite(n) ? n : v; };
+// text -> number only for plain numbers; "52,30" (two values) stays text
+const xnum = v => { if (typeof v !== 'string' || !/^-?\d+(\.\d+)?$/.test(v.trim()) || v.trim().length > 15 || /^0\d/.test(v.trim())) return v ?? ''; const n = Number(v.trim()); return isFinite(n) ? n : v; };
+// HT connection for the Master file split: entered in HT Connection, or (older imported rows) Category "HT…" / Application No. "…/RT/HT…"
+const isHTRow = v => isHT(v) || /^HT/i.test(clean(v.cat)) || /\/RT\/HT/i.test(String(v.app ?? '').replace(/\s+/g, ''));
+function masterSheet(recs, keys, heads) {
+  const H = [...keys.map(k => (heads && heads[k]) || MCOL[k] || EXTRA_COL[k]), 'Last Updated', 'Updated By'];
+  const aoa = [H], dateCells = [];
+  recs.forEach((r, i) => {
+    const row = keys.map((k, c) => {
+      const v = r.v[k];
+      if (isD(v)) { dateCells.push([i + 1, c]); return v.d; }
+      if (k === 'app' || /R$/.test(k) || k === 'cei' || k === 'isr' || k === 'eurja' || k === 'icap' || k === 'imake') return v ?? '';
+      return xnum(v);
+    });
+    row.push(r.updatedAt ? new Date(r.updatedAt).toLocaleString('en-IN') : '', r.updatedBy || '');
+    aoa.push(row);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  for (const [r, c] of dateCells) { const a = XLSX.utils.encode_cell({ r, c }); if (ws[a]) { ws[a].t = 'n'; ws[a].z = 'dd-mm-yyyy'; } }
+  ws['!cols'] = H.map((h, i) => ({ wch: i === 4 ? 34 : Math.min(Math.max(String(h).length, 10), 26) }));
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(aoa.length - 1, 1), c: H.length - 1 } }) };
+  ws['!freeze'] = { xSplit: 2, ySplit: 1 };
+  return ws;
+}
 async function downloadFullMaster() {
   busy(true, 'Collecting data from server…'); await tick();
   try {
     await DB.loadMaster();
-    const geda = await DB.pageAll('geda', 'app_no,data', ['app_key']);
-    const hset = await S.sb.from('settings').select('value').eq('key', 'geda_headers');
-    let gh = (hset.data && hset.data[0] && hset.data[0].value) || [];
-    if (!gh.length) { const s = new Set(); geda.forEach(g => Object.keys(g.data || {}).forEach(k => s.add(k))); gh = [...s]; }
+    const ht = S.mRows.filter(r => isHTRow(r.v)), lt = S.mRows.filter(r => !isHTRow(r.v));
     const wb = XLSX.utils.book_new();
-    const keys = ALLKEYS;
-    const H = [...keys.map(k => MCOL[k] || EXTRA_COL[k]), 'Last Updated', 'Updated By'];
-    const aoa = [H];
-    const dateCells = [];
-    S.mRows.forEach((r, i) => {
+    XLSX.utils.book_append_sheet(wb, masterSheet(lt, ALLKEYS), 'LT Connections');
+    XLSX.utils.book_append_sheet(wb, masterSheet(ht, ALLKEYS), 'HT Connections');
+    busy(true, 'Writing Excel…'); await tick();
+    XLSX.writeFile(wb, `Master File for GEDA Applications ${fmtD(todaySerial())}.xlsx`, { compression: true });
+    toast(`Master downloaded: ${lt.length} LT and ${ht.length} HT connections.`, 'ok');
+    refreshAll();
+  } catch (e) { toast('Download failed: ' + esc(e.message), 'bad', 8000); }
+  finally { busy(false); }
+}
+
+/* ---------- HT Solar Master download (HT connections only) ---------- */
+// LT-only columns (meter/SMC, testing, RO No., generation meter) are left out; RO date is the entry date for HT.
+const HT_SKIP = new Set(['meter', 'meterR', 'test', 'testR', 'roNo', 'genMeter', 'connType', 'agrYes']);
+const HT_HEAD = { roDate: 'Entry Date', bidir: 'Connection Released', icap: 'Inverter Capacity (kW)', imake: 'Inverter Make', isr: 'Inverter Sr. No.' };
+async function downloadHTMaster() {
+  busy(true, 'Collecting HT connections from server…'); await tick();
+  try {
+    await DB.loadMaster();
+    const rows = S.mRows.filter(r => isHTRow(r.v));
+    if (!rows.length) { toast('No HT connections on the server yet.', 'bad'); return; }
+    const used = k => rows.some(r => { const x = clean(showVal(r.v[k])); return x && !/^[-0]*$/.test(x); });
+    const keys = ALLKEYS.filter(k => !HT_SKIP.has(k) || (k !== 'connType' && used(k)));
+    const iAt = keys.indexOf('isr') + 1;
+    const H = keys.map(k => HT_HEAD[k] || MCOL[k] || EXTRA_COL[k]);
+    H.splice(iAt, 0, 'No. of Inverters', 'Total Inverter Capacity (kW)');
+    H.push('Status', 'Days Pending', 'Last Updated', 'Updated By');
+    const today = todaySerial(), aoa = [H], dateCells = [];
+    rows.sort((a, b) => (numOr(a.v.sr) - numOr(b.v.sr)) || a.key.localeCompare(b.key)).forEach((r, i) => {
       const row = keys.map((k, c) => {
         const v = r.v[k];
-        if (isD(v)) { dateCells.push([i + 1, c]); return v.d; }
-        if (k === 'app' || /R$/.test(k) || k === 'cei' || k === 'isr' || k === 'eurja') return v ?? '';
+        if (isD(v)) { dateCells.push([i + 1, c >= iAt ? c + 2 : c]); return v.d; }
+        if (k === 'app' || /R$/.test(k) || k === 'cei' || k === 'isr' || k === 'eurja' || k === 'icap' || k === 'imake') return v ?? '';
         return xnum(v);
       });
-      row.push(r.updatedAt ? new Date(r.updatedAt).toLocaleString('en-IN') : '', r.updatedBy || '');
+      row.splice(iAt, 0, invCount(showVal(r.v.icap)) || '', sumCap(showVal(r.v.icap)) || '');
+      const st = bidirState(r.v), rs = roSerial(r.v);
+      row.push(st === 'released' ? 'Released' : st === 'pending' ? 'Pending' : clean(showVal(r.v.bidir)), st === 'pending' && rs ? today - rs : '',
+        r.updatedAt ? new Date(r.updatedAt).toLocaleString('en-IN') : '', r.updatedBy || '');
       aoa.push(row);
     });
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     for (const [r, c] of dateCells) { const a = XLSX.utils.encode_cell({ r, c }); if (ws[a]) { ws[a].t = 'n'; ws[a].z = 'dd-mm-yyyy'; } }
     ws['!cols'] = H.map((h, i) => ({ wch: i === 4 ? 34 : Math.min(Math.max(String(h).length, 10), 26) }));
     ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: aoa.length - 1, c: H.length - 1 } }) };
-    ws['!freeze'] = { xSplit: 2, ySplit: 1 };
-    XLSX.utils.book_append_sheet(wb, ws, 'Master');
-    const gaoa = [gh, ...geda.map(g => gh.map(h => (g.data || {})[h] ?? ''))];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(gaoa), 'GEDA FORMAT');
-    XLSX.utils.book_append_sheet(wb, pendencySheet(S.mRows.filter(r => bidirState(r.v) === 'pending' && !isHT(r.v))), 'Pendency');
-    XLSX.utils.book_append_sheet(wb, pendencySheet(S.mRows.filter(r => bidirState(r.v) === 'pending' && isHT(r.v)), 'ht'), 'HT Pendency');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['SDN Code', 'Name of SDn'], ...[...S.sdn.entries()].map(([c, n]) => [isNum(c) ? +c : c, n])]), 'SDN Code');
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'HT Master');
+    XLSX.utils.book_append_sheet(wb, pendencySheet(rows.filter(r => bidirState(r.v) === 'pending'), 'ht'), 'HT Pendency');
     busy(true, 'Writing Excel…'); await tick();
-    XLSX.writeFile(wb, `Master File for GEDA Applications ${fmtD(todaySerial())}.xlsx`, { compression: true });
+    XLSX.writeFile(wb, `HT Solar Master File ${fmtD(todaySerial())}.xlsx`, { compression: true });
+    toast(`HT Solar Master downloaded: ${rows.length} HT connection${rows.length === 1 ? '' : 's'}.`, 'ok');
     refreshAll();
-  } catch (e) { toast('Download failed: ' + esc(e.message), 'bad', 8000); }
+  } catch (e) { console.error(e); toast('Download failed: ' + esc(e.message), 'bad', 8000); }
   finally { busy(false); }
 }

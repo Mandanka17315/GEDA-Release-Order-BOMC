@@ -639,8 +639,9 @@ async function importMasterFile(file) {
   busy(true, 'Reading Master file…'); await tick();
   try {
     const wb = await readWorkbook(file);
-    if (!wb.Sheets['Master']) throw new Error('No sheet named "Master" in this file.');
-    const master = masterRowsFromAoa(sheetRows(wb.Sheets['Master']));
+    const msh = wb.Sheets['Master'] ? ['Master'] : ['LT Connections', 'HT Connections'].filter(n => wb.Sheets[n]);
+    if (!msh.length) throw new Error('No sheet named "Master" (or "LT Connections" / "HT Connections") in this file.');
+    const master = msh.flatMap(n => masterRowsFromAoa(sheetRows(wb.Sheets[n])));
     const gd = wb.Sheets['GEDA FORMAT'] ? gedaRowsFromAoa(sheetRows(wb.Sheets['GEDA FORMAT'])) : null;
     const sdn = wb.Sheets['SDN Code'] ? sheetRows(wb.Sheets['SDN Code']).slice(1).filter(r => r[0] !== '' && r[1] !== '').map(r => ({ code: String(r[0]).trim(), name: clean(r[1]) })) : [];
     busy(false);
@@ -712,6 +713,7 @@ function init() {
   $('#portalFile').onchange = e => { if (e.target.files[0]) importPortal(e.target.files[0]); e.target.value = ''; };
   $('#masterFile').onchange = e => { if (e.target.files[0]) importMasterFile(e.target.files[0]); e.target.value = ''; };
   $('#btnFullMaster').onclick = downloadFullMaster;
+  $('#btnHTMaster').onclick = downloadHTMaster;
   window.addEventListener('beforeunload', e => { if (PEND.edits.size) { e.preventDefault(); e.returnValue = ''; } });
   boot();
 }
